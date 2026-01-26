@@ -7,6 +7,9 @@ from ArcData import ArcData
 from ArcProblem import ArcProblem
 from ArcSet import ArcSet
 from ArcAgent import ArcAgent
+from ArcProblemPlot import ArcPlot
+from matplotlib import pyplot
+
 
 def run_training_data(agent: ArcAgent, arc_problems: list[ArcProblem]) -> dict[ArcProblem, tuple[bool, list]]:
     """
@@ -16,6 +19,13 @@ def run_training_data(agent: ArcAgent, arc_problems: list[ArcProblem]) -> dict[A
     train_ans_dict: dict[ArcProblem, tuple[bool, list]] = dict()
     for trn_problem in arc_problems:
         preds: list[np.ndarray] = agent.make_predictions(trn_problem)
+
+        # --- VISUALIZATION (LOCAL DEBUG ONLY) ---
+        # plotter = ArcPlot()
+        # fig = plotter.plot_arc_problem(trn_problem)
+        # pyplot.show()
+        # ---------------------------------------
+
         correct = False
 
         if len(preds) <= 3:

@@ -37,8 +37,14 @@ class ArcAgent:
         This will just be an empty answer the size of the input data;
         delete it before you start adding your own predictions.
         '''
-        output = np.zeros_like(arc_problem.test_set().get_input_data().data())
+        output = arc_problem.test_set().get_input_data().data()
         # rotate 90 degrees
         predictions.append(np.rot90(output,1))
+
+        # rotate 180 degrees
+        predictions.append(np.rot90(output,2))
+
+        # flip vertically
+        predictions.append(np.flipud(output))
 
         return predictions

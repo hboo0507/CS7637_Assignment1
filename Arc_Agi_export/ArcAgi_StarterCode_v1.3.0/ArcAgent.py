@@ -38,6 +38,7 @@ class ArcAgent:
         delete it before you start adding your own predictions.
         '''
         output = np.zeros_like(arc_problem.test_set().get_input_data().data())
-        predictions.append(output)
+        # rotate 90 degrees
+        predictions.append(np.rot90(output,1))
 
         return predictions

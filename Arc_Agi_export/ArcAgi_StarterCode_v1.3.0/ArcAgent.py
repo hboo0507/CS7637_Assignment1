@@ -1,50 +1,75 @@
 import numpy as np
-
 from ArcProblem import ArcProblem
-from ArcData import ArcData
-from ArcSet import ArcSet
 
 
 class ArcAgent:
     def __init__(self):
-        """
-        You may add additional variables to this init method. Be aware that it gets called only once
-        and then the make_predictions method will get called several times.
-        """
         pass
 
     def make_predictions(self, arc_problem: ArcProblem) -> list[np.ndarray]:
-        """
-        Write the code in this method to solve the incoming ArcProblem.
-        Your agent will receive 1 problem at a time.
 
-        You can add up to THREE (3) the predictions to the
-        predictions list provided below that you need to
-        return at the end of this method.
+        train_pairs = []
+        for s in arc_problem.training_set():
+            inp = s.get_input_data().data()
+            out = s.get_output_data().data()
+            train_pairs.append((inp, out))
 
-        In the Autograder, the test data output in the arc problem will be set to None
-        so your agent cannot peek at the answer (even on the public problems).
+        test_input = arc_problem.test_set().get_input_data().data()
 
-        Also, if you return more than 3 predictions in the list it
-        is considered an ERROR and the test will be automatically
-        marked as INCORRECT.
-        """
+        # ---- Try crop rule ----
+        if self._fits_all_training(train_pairs, self._crop_nonzero):
+            return [self._crop_nonzero(test_input)]
 
-        predictions: list[np.ndarray] = list()
+        # ---- Try AND rule ----
+        if self._fits_all_training(train_pairs, self._two_panel_and):
+            return [self._two_panel_and(test_input)]
 
-        '''
-        The next 2 lines are only an example of how to populate the predictions list.
-        This will just be an empty answer the size of the input data;
-        delete it before you start adding your own predictions.
-        '''
-        output = arc_problem.test_set().get_input_data().data()
-        # rotate 90 degrees
-        predictions.append(np.rot90(output,1))
+        # ---- Fallback ----
+        return [
+            np.rot90(test_input, 1),
+            np.rot90(test_input, 2),
+            np.flipud(test_input)
+        ][:3]
 
-        # rotate 180 degrees
-        predictions.append(np.rot90(output,2))
+    # ----------------------------------------
+    # Check rule on all training pairs
+    # ----------------------------------------
+    def _fits_all_training(self, train_pairs, fn):
+        for inp, out in train_pairs:
+            pred = fn(inp)
+            if pred is None or not np.array_equal(pred, out):
+                return False
+        return True
 
-        # flip vertically
-        predictions.append(np.flipud(output))
+    # ----------------------------------------
+    # Tight crop around non-zero
+    # ----------------------------------------
+    def _crop_nonzero(self, x):
+        coords = np.argwhere(x != 0)
+        if coords.size == 0:
+            return None
+        r0, c0 = coords.min(axis=0)
+        r1, c1 = coords.max(axis=0)
+        return x[r0:r1+1, c0:c1+1]
 
-        return predictions
+    # ----------------------------------------
+    # Two panel AND (separator = 5)
+    # ----------------------------------------
+    def _two_panel_and(self, x):
+        sep_cols = [c for c in range(x.shape[1]) if np.all(x[:, c] == 5)]
+        if not sep_cols:
+            return None
+
+        sep = sep_cols[0]
+
+        left = x[:, :sep]
+        right = x[:, sep+1:]
+
+        if left.shape != right.shape:
+            return None
+
+        mask = (left != 0) & (right != 0)
+
+        out = np.zeros_like(left)
+        out[mask] = 2
+        return out

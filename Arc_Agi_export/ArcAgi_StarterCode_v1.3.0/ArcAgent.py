@@ -4,13 +4,9 @@ from ArcProblem import ArcProblem
 
 class ArcAgent:
     def __init__(self):
-        # Rule-based ARC agent
-        # Uses training data to decide which transformation rule applies
         pass
 
     def make_predictions(self, arc_problem: ArcProblem) -> list[np.ndarray]:
-
-        # Collect training input-output pairs
         train_pairs = []
         for s in arc_problem.training_set():
             inp = s.get_input_data().data()
@@ -18,34 +14,48 @@ class ArcAgent:
             train_pairs.append((inp, out))
 
         test_input = arc_problem.test_set().get_input_data().data()
-
         predictions = []
 
-        # Candidate transformation rules
-        rules = [
-            self._crop_nonzero,
-            self._two_panel_and,
-            self._fill_diagonals,
-            self._two_panel_nor_horizontal,
+        # Simple fixed rules
+        simple_rules = [
+            lambda x: x.copy(),
             lambda x: np.rot90(x, 1),
             lambda x: np.rot90(x, 2),
+            lambda x: np.rot90(x, 3),
             lambda x: np.flipud(x),
+            lambda x: np.fliplr(x),
+            lambda x: x.T,
+            self._crop_nonzero,
+            self._crop_and_swap_two_colors,
         ]
 
-        # Only keep rules that match ALL training examples
-        for rule in rules:
+        for rule in simple_rules:
             if self._fits_all_training(train_pairs, rule):
                 pred = rule(test_input)
-                if pred is not None:
-                    predictions.append(pred)
+                self._append_if_new(predictions, pred)
 
-            if len(predictions) == 3:
-                break
+        # More general panel logic rules
+        panel_rules = [
+            self._make_panel_rule(train_pairs, mode="and"),
+            self._make_panel_rule(train_pairs, mode="nor"),
+        ]
+
+        for rule in panel_rules:
+            if rule is not None:
+                pred = rule(test_input)
+                self._append_if_new(predictions, pred)
 
         return predictions[:3]
 
+    def _append_if_new(self, predictions, pred):
+        if pred is None:
+            return
+        for p in predictions:
+            if np.array_equal(p, pred):
+                return
+        predictions.append(pred)
+
     def _fits_all_training(self, train_pairs, fn):
-        # Check if a rule reproduces every training output
         for inp, out in train_pairs:
             pred = fn(inp)
             if pred is None or not np.array_equal(pred, out):
@@ -53,97 +63,130 @@ class ArcAgent:
         return True
 
     def _crop_nonzero(self, x):
-        # Extract the smallest rectangle containing all non-zero pixels
         coords = np.argwhere(x != 0)
         if coords.size == 0:
             return None
-
         r0, c0 = coords.min(axis=0)
         r1, c1 = coords.max(axis=0)
+        return x[r0:r1 + 1, c0:c1 + 1]
 
-        return x[r0:r1+1, c0:c1+1]
-
-    def _two_panel_and(self, x):
-        # Split left/right using column of 5s
-        # Output 2 where both sides are non-zero
-        sep_cols = [c for c in range(x.shape[1]) if np.all(x[:, c] == 5)]
-        if not sep_cols:
+    def _crop_and_swap_two_colors(self, x):
+        cropped = self._crop_nonzero(x)
+        if cropped is None:
             return None
 
-        sep = sep_cols[0]
+        colors = np.unique(cropped)
+        colors = colors[colors != 0]
 
-        left = x[:, :sep]
-        right = x[:, sep+1:]
-
-        if left.shape != right.shape:
+        if len(colors) != 2:
             return None
 
-        mask = (left != 0) & (right != 0)
-
-        out = np.zeros_like(left)
-        out[mask] = 2
-
+        a, b = colors
+        out = cropped.copy()
+        out[cropped == a] = b
+        out[cropped == b] = a
         return out
 
-    def _fill_diagonals(self, x):
-        # Extend each non-zero pixel in four diagonal directions:
-        # down-right, up-left, up-right, down-left
+    def _find_separator(self, x):
         h, w = x.shape
-        out = x.copy()
 
+        # Check rows
         for r in range(h):
-            for c in range(w):
-                if x[r, c] != 0:
-                    color = x[r, c]
+            vals = np.unique(x[r, :])
+            if len(vals) == 1 and vals[0] != 0:
+                top = x[:r, :]
+                bottom = x[r + 1:, :]
+                if top.shape == bottom.shape and top.size > 0:
+                    return ("horizontal", r, vals[0])
 
-                    # down-right
-                    rr, cc = r, c
-                    while rr < h and cc < w:
-                        out[rr, cc] = color
-                        rr += 1
-                        cc += 1
+        # Check cols
+        for c in range(w):
+            vals = np.unique(x[:, c])
+            if len(vals) == 1 and vals[0] != 0:
+                left = x[:, :c]
+                right = x[:, c + 1:]
+                if left.shape == right.shape and left.size > 0:
+                    return ("vertical", c, vals[0])
 
-                    # up-left
-                    rr, cc = r, c
-                    while rr >= 0 and cc >= 0:
-                        out[rr, cc] = color
-                        rr -= 1
-                        cc -= 1
+        return None
 
-                    # up-right
-                    rr, cc = r, c
-                    while rr >= 0 and cc < w:
-                        out[rr, cc] = color
-                        rr -= 1
-                        cc += 1
-
-                    # down-left
-                    rr, cc = r, c
-                    while rr < h and cc >= 0:
-                        out[rr, cc] = color
-                        rr += 1
-                        cc -= 1
-
-        return out
-
-    def _two_panel_nor_horizontal(self, x):
-        # Split top/bottom using row of 4s
-        # Output 3 where BOTH cells are zero (NOR logic)
-        sep_rows = [r for r in range(x.shape[0]) if np.all(x[r, :] == 4)]
-        if not sep_rows:
+    def _split_by_separator(self, x):
+        sep = self._find_separator(x)
+        if sep is None:
             return None
 
-        sep = sep_rows[0]
+        orientation, idx, _ = sep
 
-        top = x[:sep, :]
-        bottom = x[sep+1:, :]
+        if orientation == "horizontal":
+            a = x[:idx, :]
+            b = x[idx + 1:, :]
+        else:
+            a = x[:, :idx]
+            b = x[:, idx + 1:]
 
-        if top.shape != bottom.shape:
+        if a.shape != b.shape:
             return None
 
-        mask = (top == 0) & (bottom == 0)
+        return a, b
 
-        out = np.zeros_like(top)
-        out[mask] = 3
+    def _make_panel_rule(self, train_pairs, mode="and"):
+        output_color = None
 
-        return out
+        for inp, out in train_pairs:
+            split = self._split_by_separator(inp)
+            if split is None:
+                return None
+
+            a, b = split
+
+            if a.shape != out.shape:
+                return None
+
+            if mode == "and":
+                mask = (a != 0) & (b != 0)
+            elif mode == "nor":
+                mask = (a == 0) & (b == 0)
+            else:
+                return None
+
+            nonzero_out = np.unique(out[out != 0])
+
+            # Output should usually use exactly one nonzero color
+            if len(nonzero_out) > 1:
+                return None
+
+            inferred = 1 if len(nonzero_out) == 0 else int(nonzero_out[0])
+
+            candidate = np.zeros_like(a)
+            candidate[mask] = inferred
+
+            if not np.array_equal(candidate, out):
+                return None
+
+            if output_color is None:
+                output_color = inferred
+            elif output_color != inferred:
+                return None
+
+        if output_color is None:
+            return None
+
+        def rule(x):
+            split = self._split_by_separator(x)
+            if split is None:
+                return None
+
+            a, b = split
+
+            if mode == "and":
+                mask = (a != 0) & (b != 0)
+            elif mode == "nor":
+                mask = (a == 0) & (b == 0)
+            else:
+                return None
+
+            out = np.zeros_like(a)
+            out[mask] = output_color
+            return out
+
+        return rule

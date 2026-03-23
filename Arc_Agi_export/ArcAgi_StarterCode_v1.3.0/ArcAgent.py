@@ -4,9 +4,13 @@ from ArcProblem import ArcProblem
 
 class ArcAgent:
     def __init__(self):
-        pass
+        self.debug = True
+        self.debug_problem = "3de23699"   # 특정 문제만 자세히 보고 싶으면 id 넣기
+        # self.debug_problem = None       # 전체 문제 다 보고 싶으면 None
 
     def make_predictions(self, arc_problem: ArcProblem) -> list[np.ndarray]:
+        problem_name = arc_problem.problem_name()
+
         train_pairs = []
         for s in arc_problem.training_set():
             inp = s.get_input_data().data()
@@ -16,39 +20,108 @@ class ArcAgent:
         test_input = arc_problem.test_set().get_input_data().data()
         predictions = []
 
-        # Simple direct rules
+        if self._should_debug(problem_name):
+            print(f"\n===== Problem: {problem_name} =====")
+
         simple_rules = [
-            lambda x: x.copy(),
-            lambda x: np.rot90(x, 1),
-            lambda x: np.rot90(x, 2),
-            lambda x: np.rot90(x, 3),
-            lambda x: np.flipud(x),
-            lambda x: np.fliplr(x),
-            lambda x: x.T,
-            self._crop_nonzero,
-            self._crop_and_swap_two_colors,
-            self._quad_mirror,
-            self._pair_to_line_same_row,
-            self._pair_to_line_same_col,
-            self._inner_shape_recolor_from_four_markers,   # <-- new important rule
+            ("identity", lambda x: x.copy()),
+            ("rot90", lambda x: np.rot90(x, 1)),
+            ("rot180", lambda x: np.rot90(x, 2)),
+            ("rot270", lambda x: np.rot90(x, 3)),
+            ("flipud", lambda x: np.flipud(x)),
+            ("fliplr", lambda x: np.fliplr(x)),
+            ("transpose", lambda x: x.T),
+            ("crop_nonzero", self._crop_nonzero),
+            ("crop_and_swap_two_colors", self._crop_and_swap_two_colors),
+            ("quad_mirror", self._quad_mirror),
+            ("pair_to_line_same_row", self._pair_to_line_same_row),
+            ("pair_to_line_same_col", self._pair_to_line_same_col),
+            ("inner_shape_recolor_from_four_markers", self._inner_shape_recolor_from_four_markers),
         ]
 
-        for rule in simple_rules:
-            if self._fits_all_training(train_pairs, rule):
-                self._append_if_new(predictions, rule(test_input))
+        for name, rule in simple_rules:
+            try:
+                fits = self._fits_all_training(train_pairs, rule, rule_name=name, problem_name=problem_name)
+                if self._should_debug(problem_name):
+                    print(f"[simple] {name}: fits={fits}")
+                if fits:
+                    pred = rule(test_input)
+                    if self._should_debug(problem_name):
+                        print(f"[simple] {name}: pred is None? {pred is None}")
+                        if pred is not None:
+                            print(f"[simple] {name}: pred shape={pred.shape}")
+                            print(pred.tolist())
+                    self._append_if_new(predictions, pred)
+            except Exception as e:
+                if self._should_debug(problem_name):
+                    print(f"[simple] {name} crashed: {e}")
 
-        # Learned color extraction rule
-        color_rule = self._make_extract_single_input_color_rule(train_pairs)
+        color_rule = self._make_extract_single_input_color_rule(train_pairs, problem_name)
+        if self._should_debug(problem_name):
+            print("[learned] extract_single_input_color_rule is None?", color_rule is None)
         if color_rule is not None:
-            self._append_if_new(predictions, color_rule(test_input))
+            try:
+                pred = color_rule(test_input)
+                if self._should_debug(problem_name):
+                    print("[learned] extract_single_input_color_rule pred is None?", pred is None)
+                    if pred is not None:
+                        print(pred.tolist())
+                self._append_if_new(predictions, pred)
+            except Exception as e:
+                if self._should_debug(problem_name):
+                    print("[learned] extract_single_input_color_rule crashed:", e)
 
-        # Learned boolean panel rules
         for mode in ["and", "or", "xor", "nor"]:
-            rule = self._make_panel_rule(train_pairs, mode)
+            rule = self._make_panel_rule(train_pairs, mode, problem_name)
+            if self._should_debug(problem_name):
+                print(f"[panel] {mode}: rule is None? {rule is None}")
             if rule is not None:
-                self._append_if_new(predictions, rule(test_input))
+                try:
+                    pred = rule(test_input)
+                    if self._should_debug(problem_name):
+                        print(f"[panel] {mode}: pred is None? {pred is None}")
+                        if pred is not None:
+                            print(pred.tolist())
+                    self._append_if_new(predictions, pred)
+                except Exception as e:
+                    if self._should_debug(problem_name):
+                        print(f"[panel] {mode} crashed: {e}")
+
+        if self._should_debug(problem_name):
+            print(f"total predictions: {len(predictions)}")
 
         return predictions[:3]
+
+    # -------------------------
+    # debug helpers
+    # -------------------------
+    def _should_debug(self, problem_name):
+        if not self.debug:
+            return False
+        if self.debug_problem is None:
+            return True
+        return problem_name == self.debug_problem
+
+    def _debug_train_failure(self, problem_name, rule_name, idx, inp, out, pred):
+        if not self._should_debug(problem_name):
+            return
+
+        print(f"  -> FAIL on train example {idx} for rule [{rule_name}]")
+        if pred is None:
+            print("     pred is None")
+            return
+
+        print(f"     pred shape = {pred.shape}, out shape = {out.shape}")
+        if pred.shape == out.shape:
+            print("     pred:")
+            print(pred.tolist())
+            print("     out :")
+            print(out.tolist())
+        else:
+            print("     pred:")
+            print(pred.tolist())
+            print("     out :")
+            print(out.tolist())
 
     # -------------------------
     # utility
@@ -61,10 +134,11 @@ class ArcAgent:
                 return
         predictions.append(pred)
 
-    def _fits_all_training(self, train_pairs, fn):
-        for inp, out in train_pairs:
+    def _fits_all_training(self, train_pairs, fn, rule_name="", problem_name=""):
+        for i, (inp, out) in enumerate(train_pairs):
             pred = fn(inp)
             if pred is None or not np.array_equal(pred, out):
+                self._debug_train_failure(problem_name, rule_name, i, inp, out, pred)
                 return False
         return True
 
@@ -108,7 +182,7 @@ class ArcAgent:
     # -------------------------
     def _pair_to_line_same_row(self, x):
         out = np.zeros_like(x)
-        colors = [c for c in np.unique(x) if c != 0]
+        colors = [int(c) for c in np.unique(x) if c != 0]
 
         changed = False
         for color in colors:
@@ -136,7 +210,7 @@ class ArcAgent:
 
     def _pair_to_line_same_col(self, x):
         out = np.zeros_like(x)
-        colors = [c for c in np.unique(x) if c != 0]
+        colors = [int(c) for c in np.unique(x) if c != 0]
 
         changed = False
         for color in colors:
@@ -167,27 +241,23 @@ class ArcAgent:
     # -------------------------
     def _inner_shape_recolor_from_four_markers(self, x):
         """
-        Rule for tasks like 3de23699:
-
-        - Find a color that appears exactly 4 times
-        - Those 4 cells must be the corners of an axis-aligned rectangle
-        - Look strictly inside that rectangle
-        - Collect all non-zero cells inside that are NOT the marker color
-        - Recolor them to the marker color
-        - Tight crop and return
+        3de23699용:
+        - 어떤 색이 정확히 4개
+        - 그 4개가 축 정렬 직사각형의 4코너
+        - 내부의 다른 non-zero 도형만 남김
+        - 그 색을 marker 색으로 통일
+        - crop
         """
         nonzero_colors = [int(c) for c in np.unique(x) if c != 0]
 
         for marker_color in nonzero_colors:
             coords = np.argwhere(x == marker_color)
-
             if len(coords) != 4:
                 continue
 
             rows = sorted(set(int(r) for r, _ in coords))
             cols = sorted(set(int(c) for _, c in coords))
 
-            # Must form exactly 2 distinct rows and 2 distinct cols
             if len(rows) != 2 or len(cols) != 2:
                 continue
 
@@ -196,17 +266,15 @@ class ArcAgent:
 
             expected = {(r0, c0), (r0, c1), (r1, c0), (r1, c1)}
             actual = set((int(r), int(c)) for r, c in coords)
-
             if actual != expected:
                 continue
 
-            # Need non-empty interior
             if r1 - r0 <= 1 or c1 - c0 <= 1:
                 continue
 
             interior = x[r0 + 1:r1, c0 + 1:c1]
 
-            # keep only non-zero cells that are not the marker color
+            # marker_color 자신 제외, 나머지 non-zero만 대상
             mask = (interior != 0) & (interior != marker_color)
             if not np.any(mask):
                 continue
@@ -223,18 +291,16 @@ class ArcAgent:
     # -------------------------
     # learned color extraction
     # -------------------------
-    def _make_extract_single_input_color_rule(self, train_pairs):
-        """
-        Learn a rule of the form:
-        output == keep only cells of one specific input color, zero elsewhere.
-        """
+    def _make_extract_single_input_color_rule(self, train_pairs, problem_name=""):
         chosen_input_color = None
         chosen_output_color = None
 
-        for inp, out in train_pairs:
+        for idx, (inp, out) in enumerate(train_pairs):
             out_colors = [int(c) for c in np.unique(out) if c != 0]
 
             if len(out_colors) != 1:
+                if self._should_debug(problem_name):
+                    print(f"  -> extract_single_input_color_rule fail at train {idx}: output has {len(out_colors)} nonzero colors")
                 return None
 
             out_color = out_colors[0]
@@ -249,12 +315,16 @@ class ArcAgent:
                     break
 
             if matched_input_color is None:
+                if self._should_debug(problem_name):
+                    print(f"  -> extract_single_input_color_rule fail at train {idx}: no matching input color")
                 return None
 
             if chosen_input_color is None:
                 chosen_input_color = matched_input_color
                 chosen_output_color = out_color
             elif chosen_input_color != matched_input_color or chosen_output_color != out_color:
+                if self._should_debug(problem_name):
+                    print(f"  -> extract_single_input_color_rule fail at train {idx}: inconsistent chosen colors")
                 return None
 
         if chosen_input_color is None:
@@ -314,16 +384,20 @@ class ArcAgent:
             return (a == 0) & (b == 0)
         return None
 
-    def _make_panel_rule(self, train_pairs, mode):
+    def _make_panel_rule(self, train_pairs, mode, problem_name=""):
         out_color = None
 
-        for inp, out in train_pairs:
+        for idx, (inp, out) in enumerate(train_pairs):
             split = self._split_by_separator(inp)
             if split is None:
+                if self._should_debug(problem_name):
+                    print(f"  -> panel {mode} fail at train {idx}: no separator")
                 return None
 
             a, b = split
             if a.shape != out.shape:
+                if self._should_debug(problem_name):
+                    print(f"  -> panel {mode} fail at train {idx}: shape mismatch {a.shape} vs {out.shape}")
                 return None
 
             mask = self._bool_mask(a, b, mode)
@@ -332,6 +406,8 @@ class ArcAgent:
 
             nz = np.unique(out[out != 0])
             if len(nz) > 1:
+                if self._should_debug(problem_name):
+                    print(f"  -> panel {mode} fail at train {idx}: output has multiple nonzero colors")
                 return None
 
             inferred_color = 1 if len(nz) == 0 else int(nz[0])
@@ -340,11 +416,15 @@ class ArcAgent:
             candidate[mask] = inferred_color
 
             if not np.array_equal(candidate, out):
+                if self._should_debug(problem_name):
+                    print(f"  -> panel {mode} fail at train {idx}: candidate mismatch")
                 return None
 
             if out_color is None:
                 out_color = inferred_color
             elif out_color != inferred_color:
+                if self._should_debug(problem_name):
+                    print(f"  -> panel {mode} fail at train {idx}: inconsistent output color")
                 return None
 
         if out_color is None:

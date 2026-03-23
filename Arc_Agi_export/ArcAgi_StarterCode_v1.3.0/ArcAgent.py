@@ -5,8 +5,10 @@ from ArcProblem import ArcProblem
 class ArcAgent:
     def __init__(self):
         self.debug = False
-        self.debug_problem = "3de23699"
-        # self.debug_problem = None
+        self.debug_problem = None
+        # 예시:
+        # self.debug = True
+        # self.debug_problem = "3de23699"
 
     def make_predictions(self, arc_problem: ArcProblem) -> list[np.ndarray]:
         problem_name = arc_problem.problem_name()
@@ -37,6 +39,7 @@ class ArcAgent:
             ("pair_to_line_same_row", self._pair_to_line_same_row),
             ("pair_to_line_same_col", self._pair_to_line_same_col),
             ("inner_shape_recolor_from_four_markers", self._inner_shape_recolor_from_four_markers),
+            ("extend_diag_from_1_and_2_blocks", self._extend_diag_from_1_and_2_blocks),
         ]
 
         for name, rule in simple_rules:
@@ -235,13 +238,11 @@ class ArcAgent:
     # -------------------------
     def _inner_shape_recolor_from_four_markers(self, x):
         """
-        3de23699 같은 유형:
         - 어떤 색이 정확히 4번 등장
         - 그 4개가 축 정렬 직사각형의 4코너
         - 내부 rectangle 전체를 output으로 사용
         - 내부에서 marker 색이 아닌 non-zero만 marker 색으로 변경
         - zeros는 그대로 유지
-        - tight crop 하지 않음
         """
         nonzero_colors = [int(c) for c in np.unique(x) if c != 0]
 
@@ -277,6 +278,59 @@ class ArcAgent:
             return interior
 
         return None
+
+    # -------------------------
+    # diagonal extension rule for 1 and 2
+    # -------------------------
+    def _extend_diag_from_1_and_2_blocks(self, x):
+        """
+        1:
+          - 2x2 block를 찾고
+          - 그 block의 top-left에서 (-1, -1) 방향으로 채움
+
+        2:
+          - 2x2 block를 찾고
+          - 그 block의 bottom-right에서 (+1, +1) 방향으로 채움
+        """
+        out = x.copy()
+
+        # color 1
+        coords1 = np.argwhere(x == 1)
+        if len(coords1) == 4:
+            rows1 = sorted(set(int(r) for r, _ in coords1))
+            cols1 = sorted(set(int(c) for _, c in coords1))
+            if len(rows1) == 2 and len(cols1) == 2:
+                r0, r1 = rows1
+                c0, c1 = cols1
+                expected1 = {(r0, c0), (r0, c1), (r1, c0), (r1, c1)}
+                actual1 = set((int(r), int(c)) for r, c in coords1)
+
+                if actual1 == expected1:
+                    r, c = r0 - 1, c0 - 1
+                    while 0 <= r < x.shape[0] and 0 <= c < x.shape[1]:
+                        out[r, c] = 1
+                        r -= 1
+                        c -= 1
+
+        # color 2
+        coords2 = np.argwhere(x == 2)
+        if len(coords2) == 4:
+            rows2 = sorted(set(int(r) for r, _ in coords2))
+            cols2 = sorted(set(int(c) for _, c in coords2))
+            if len(rows2) == 2 and len(cols2) == 2:
+                r0, r1 = rows2
+                c0, c1 = cols2
+                expected2 = {(r0, c0), (r0, c1), (r1, c0), (r1, c1)}
+                actual2 = set((int(r), int(c)) for r, c in coords2)
+
+                if actual2 == expected2:
+                    r, c = r1 + 1, c1 + 1
+                    while 0 <= r < x.shape[0] and 0 <= c < x.shape[1]:
+                        out[r, c] = 2
+                        r += 1
+                        c += 1
+
+        return out
 
     # -------------------------
     # learned color extraction

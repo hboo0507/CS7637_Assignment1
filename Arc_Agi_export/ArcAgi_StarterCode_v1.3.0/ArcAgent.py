@@ -4,9 +4,9 @@ from ArcProblem import ArcProblem
 
 class ArcAgent:
     def __init__(self):
-        self.debug = True
-        self.debug_problem = "3de23699"   # 특정 문제만 자세히 보고 싶으면 id 넣기
-        # self.debug_problem = None       # 전체 문제 다 보고 싶으면 None
+        self.debug = False
+        self.debug_problem = "3de23699"
+        # self.debug_problem = None
 
     def make_predictions(self, arc_problem: ArcProblem) -> list[np.ndarray]:
         problem_name = arc_problem.problem_name()
@@ -112,16 +112,10 @@ class ArcAgent:
             return
 
         print(f"     pred shape = {pred.shape}, out shape = {out.shape}")
-        if pred.shape == out.shape:
-            print("     pred:")
-            print(pred.tolist())
-            print("     out :")
-            print(out.tolist())
-        else:
-            print("     pred:")
-            print(pred.tolist())
-            print("     out :")
-            print(out.tolist())
+        print("     pred:")
+        print(pred.tolist())
+        print("     out :")
+        print(out.tolist())
 
     # -------------------------
     # utility
@@ -241,12 +235,13 @@ class ArcAgent:
     # -------------------------
     def _inner_shape_recolor_from_four_markers(self, x):
         """
-        3de23699용:
-        - 어떤 색이 정확히 4개
+        3de23699 같은 유형:
+        - 어떤 색이 정확히 4번 등장
         - 그 4개가 축 정렬 직사각형의 4코너
-        - 내부의 다른 non-zero 도형만 남김
-        - 그 색을 marker 색으로 통일
-        - crop
+        - 내부 rectangle 전체를 output으로 사용
+        - 내부에서 marker 색이 아닌 non-zero만 marker 색으로 변경
+        - zeros는 그대로 유지
+        - tight crop 하지 않음
         """
         nonzero_colors = [int(c) for c in np.unique(x) if c != 0]
 
@@ -272,19 +267,14 @@ class ArcAgent:
             if r1 - r0 <= 1 or c1 - c0 <= 1:
                 continue
 
-            interior = x[r0 + 1:r1, c0 + 1:c1]
+            interior = x[r0 + 1:r1, c0 + 1:c1].copy()
 
-            # marker_color 자신 제외, 나머지 non-zero만 대상
             mask = (interior != 0) & (interior != marker_color)
             if not np.any(mask):
                 continue
 
-            out = np.zeros_like(interior)
-            out[mask] = marker_color
-
-            cropped = self._tight_crop(out)
-            if cropped is not None:
-                return cropped
+            interior[mask] = marker_color
+            return interior
 
         return None
 

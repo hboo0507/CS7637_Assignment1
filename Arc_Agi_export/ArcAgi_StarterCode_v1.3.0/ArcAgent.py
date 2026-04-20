@@ -38,6 +38,7 @@ class ArcAgent:
             ("inner_shape_recolor_from_four_markers", self._inner_shape_recolor_from_four_markers),
             ("extend_diag_from_1_and_2_blocks", self._extend_diag_from_1_and_2_blocks),
             ("sort_colors_by_frequency_vertical", self._sort_colors_by_frequency_vertical),
+            ("connect_flower_centers_with_ones", self._connect_flower_centers_with_ones),
             ("fill_closed_barrier_with_majority_color", self._fill_closed_barrier_with_majority_color),
         ]
 
@@ -188,6 +189,52 @@ class ArcAgent:
         bottom = np.hstack([np.flipud(x), np.rot90(x, 2)])
         return np.vstack([top, bottom])
 
+    def _find_flower_centers(self, x, color=2):
+        h, w = x.shape
+        centers = []
+        for r in range(1, h - 1):
+            for c in range(1, w - 1):
+                if x[r, c] != 0:
+                    continue
+                if x[r - 1, c] != color or x[r + 1, c] != color:
+                    continue
+                if x[r, c - 1] != color or x[r, c + 1] != color:
+                    continue
+                centers.append((r, c))
+        return centers
+
+    def _connect_flower_centers_with_ones(self, x):
+        centers = self._find_flower_centers(x, color=2)
+        if len(centers) < 2:
+            return None
+
+        out = x.copy()
+        changed = False
+
+        rows = {}
+        cols = {}
+        for r, c in centers:
+            rows.setdefault(r, []).append(c)
+            cols.setdefault(c, []).append(r)
+
+        for r, cols_in_row in rows.items():
+            cols_in_row.sort()
+            for left, right in zip(cols_in_row, cols_in_row[1:]):
+                for c in range(left + 1, right):
+                    if out[r, c] == 0:
+                        out[r, c] = 1
+                        changed = True
+
+        for c, rows_in_col in cols.items():
+            rows_in_col.sort()
+            for top, bottom in zip(rows_in_col, rows_in_col[1:]):
+                for r in range(top + 1, bottom):
+                    if out[r, c] == 0:
+                        out[r, c] = 1
+                        changed = True
+
+        return out if changed else None
+
     def _neighbors4(self, r, c, h, w):
         if r > 0:
             yield r - 1, c
@@ -224,30 +271,52 @@ class ArcAgent:
 
         return components
 
+    def _all_nonzero_components(self, x):
+        components = []
+        for color in [int(c) for c in np.unique(x) if c != 0]:
+            for comp in self._connected_components_of_color(x, color):
+                components.append((color, comp))
+        return components
+
     def _fill_closed_barrier_with_majority_color(self, x):
-        out = x.copy()
+        out = np.zeros_like(x)
         changed = False
         h, w = x.shape
 
-        for barrier_color in [int(c) for c in np.unique(x) if c != 0]:
+        barrier_components = []
+        for color, comp in self._all_nonzero_components(x):
+            if len(comp) < 5:
+                continue
+
+            comp_set = set(comp)
+            barrier_components.append((color, comp_set))
+            for r, c in comp:
+                out[r, c] = color
+                if x[r, c] != color:
+                    changed = True
+
+        if not barrier_components:
+            return None
+
+        for barrier_color, comp_set in barrier_components:
             reachable = np.zeros((h, w), dtype=bool)
             stack = []
 
             for r in range(h):
                 for c in [0, w - 1]:
-                    if x[r, c] != barrier_color and not reachable[r, c]:
+                    if (r, c) not in comp_set and not reachable[r, c]:
                         reachable[r, c] = True
                         stack.append((r, c))
             for c in range(w):
                 for r in [0, h - 1]:
-                    if x[r, c] != barrier_color and not reachable[r, c]:
+                    if (r, c) not in comp_set and not reachable[r, c]:
                         reachable[r, c] = True
                         stack.append((r, c))
 
             while stack:
                 r, c = stack.pop()
                 for nr, nc in self._neighbors4(r, c, h, w):
-                    if x[nr, nc] == barrier_color or reachable[nr, nc]:
+                    if (nr, nc) in comp_set or reachable[nr, nc]:
                         continue
                     reachable[nr, nc] = True
                     stack.append((nr, nc))
@@ -255,7 +324,7 @@ class ArcAgent:
             visited = np.zeros((h, w), dtype=bool)
             for r in range(h):
                 for c in range(w):
-                    if x[r, c] == barrier_color or reachable[r, c] or visited[r, c]:
+                    if (r, c) in comp_set or reachable[r, c] or visited[r, c]:
                         continue
 
                     region = []
@@ -266,14 +335,14 @@ class ArcAgent:
                         cr, cc = region_stack.pop()
                         region.append((cr, cc))
                         for nr, nc in self._neighbors4(cr, cc, h, w):
-                            if x[nr, nc] == barrier_color or reachable[nr, nc] or visited[nr, nc]:
+                            if (nr, nc) in comp_set or reachable[nr, nc] or visited[nr, nc]:
                                 continue
                             visited[nr, nc] = True
                             region_stack.append((nr, nc))
 
                     region_colors = [
                         int(x[rr, cc]) for rr, cc in region
-                        if x[rr, cc] != 0 and x[rr, cc] != barrier_color
+                        if x[rr, cc] != 0 and (rr, cc) not in comp_set
                     ]
                     if not region_colors:
                         continue

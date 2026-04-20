@@ -23,6 +23,9 @@ class ArcAgent:
             print(f"\n===== Problem: {problem_name} =====")
 
         simple_rules = [
+            ("mirror_propagate_across_full_separators", self._mirror_propagate_across_full_separators),
+            ("xor_top_bottom_masks_to_six", self._xor_top_bottom_masks_to_six),
+            ("overlay_split_panels_left_priority", self._overlay_split_panels_left_priority),
             ("fit_pieces_into_base_slots", self._fit_pieces_into_base_slots),
             ("mosaic_rot180_fliplr_bands", self._mosaic_rot180_fliplr_bands),
             ("mirror_attach_inside_8_border", self._mirror_attach_inside_8_border),
@@ -204,6 +207,111 @@ class ArcAgent:
         middle = np.hstack([fliplr, x, fliplr])
         bottom = np.hstack([rot180, flipud, rot180])
         return np.vstack([top, middle, bottom])
+
+    def _xor_top_bottom_masks_to_six(self, x):
+        h, w = x.shape
+        if h != 6:
+            return None
+
+        top = x[:3, :]
+        bottom = x[3:, :]
+        top_mask = top != 0
+        bottom_mask = bottom != 0
+        xor_mask = np.logical_xor(top_mask, bottom_mask)
+
+        out = np.zeros((3, w), dtype=x.dtype)
+        out[xor_mask] = 6
+        return out
+
+    def _overlay_split_panels_left_priority(self, x):
+        h, w = x.shape
+        if w < 3:
+            return None
+
+        sep_candidates = []
+        for c in range(w):
+            col = x[:, c]
+            if np.all(col == col[0]) and col[0] != 0:
+                sep_candidates.append(c)
+        if not sep_candidates:
+            return None
+
+        sep_options = [c for c in sep_candidates if c > 0 and c + 1 < w and c == w - c - 1]
+        if len(sep_options) != 1:
+            return None
+        sep = sep_options[0]
+        left = x[:, :sep]
+        right = x[:, sep + 1:]
+        if left.shape != right.shape:
+            return None
+
+        out = left.copy()
+        right_mask = right != 0
+        left_zero_mask = left == 0
+        if np.array_equal(right_mask, left_zero_mask):
+            out[right_mask] = right[right_mask]
+        return out
+
+    def _mirror_propagate_across_full_separators(self, x):
+        h, w = x.shape
+        colors = [int(c) for c in np.unique(x) if c != 0]
+        if not colors:
+            return None
+
+        sep_color = max(colors, key=lambda c: int(np.sum(x == c)))
+        sep_rows = [r for r in range(h) if np.all(x[r, :] == sep_color)]
+        sep_cols = [c for c in range(w) if np.all(x[:, c] == sep_color)]
+        if not sep_rows and not sep_cols:
+            return None
+
+        out = x.copy()
+        changed = False
+
+        row_edges = [-1] + sep_rows + [h]
+        row_spans = [(row_edges[i] + 1, row_edges[i + 1]) for i in range(len(row_edges) - 1)]
+
+        col_edges = [-1] + sep_cols + [w]
+        col_spans = [(col_edges[i] + 1, col_edges[i + 1]) for i in range(len(col_edges) - 1)]
+
+        for sep_idx, sc in enumerate(sep_cols, start=1):
+            left_c0, left_c1 = col_spans[sep_idx - 1]
+            right_c0, right_c1 = col_spans[sep_idx]
+            left_w = left_c1 - left_c0
+            right_w = right_c1 - right_c0
+            if left_w != right_w or left_w <= 0:
+                continue
+
+            reference_pairs = []
+            for r0, r1 in row_spans:
+                if r1 <= r0:
+                    continue
+                left_block = x[r0:r1, left_c0:left_c1]
+                right_block = x[r0:r1, right_c0:right_c1]
+                if np.any(left_block != 0) and np.any(right_block != 0) and np.array_equal(np.fliplr(left_block), right_block):
+                    reference_pairs.append(left_block.copy())
+
+            if not reference_pairs:
+                continue
+
+            for r0, r1 in row_spans:
+                if r1 <= r0:
+                    continue
+                left_block = x[r0:r1, left_c0:left_c1]
+                right_block = x[r0:r1, right_c0:right_c1]
+
+                left_nonzero = np.any(left_block != 0)
+                right_nonzero = np.any(right_block != 0)
+
+                if left_nonzero and not right_nonzero:
+                    if any(np.array_equal(left_block, ref) for ref in reference_pairs):
+                        out[r0:r1, right_c0:right_c1] = np.fliplr(left_block)
+                        changed = True
+                elif right_nonzero and not left_nonzero:
+                    if any(np.array_equal(np.fliplr(right_block), ref) for ref in reference_pairs):
+                        out[r0:r1, left_c0:left_c1] = np.fliplr(right_block)
+                        changed = True
+
+        return out if changed else None
 
     def _unique_orientations(self, piece):
         variants = []

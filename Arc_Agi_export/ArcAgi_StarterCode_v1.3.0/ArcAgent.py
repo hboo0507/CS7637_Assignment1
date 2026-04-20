@@ -38,6 +38,7 @@ class ArcAgent:
             ("inner_shape_recolor_from_four_markers", self._inner_shape_recolor_from_four_markers),
             ("extend_diag_from_1_and_2_blocks", self._extend_diag_from_1_and_2_blocks),
             ("sort_colors_by_frequency_vertical", self._sort_colors_by_frequency_vertical),
+            ("fill_closed_barrier_with_majority_color", self._fill_closed_barrier_with_majority_color),
         ]
 
         for name, rule in simple_rules:
@@ -186,6 +187,117 @@ class ArcAgent:
         top = np.hstack([x, np.fliplr(x)])
         bottom = np.hstack([np.flipud(x), np.rot90(x, 2)])
         return np.vstack([top, bottom])
+
+    def _neighbors4(self, r, c, h, w):
+        if r > 0:
+            yield r - 1, c
+        if r + 1 < h:
+            yield r + 1, c
+        if c > 0:
+            yield r, c - 1
+        if c + 1 < w:
+            yield r, c + 1
+
+    def _connected_components_of_color(self, x, color):
+        h, w = x.shape
+        visited = np.zeros((h, w), dtype=bool)
+        components = []
+
+        for r in range(h):
+            for c in range(w):
+                if visited[r, c] or x[r, c] != color:
+                    continue
+
+                stack = [(r, c)]
+                visited[r, c] = True
+                comp = []
+
+                while stack:
+                    cr, cc = stack.pop()
+                    comp.append((cr, cc))
+                    for nr, nc in self._neighbors4(cr, cc, h, w):
+                        if not visited[nr, nc] and x[nr, nc] == color:
+                            visited[nr, nc] = True
+                            stack.append((nr, nc))
+
+                components.append(comp)
+
+        return components
+
+    def _fill_closed_barrier_with_majority_color(self, x):
+        out = x.copy()
+        changed = False
+        h, w = x.shape
+
+        for barrier_color in [int(c) for c in np.unique(x) if c != 0]:
+            for component in self._connected_components_of_color(x, barrier_color):
+                rows = [r for r, _ in component]
+                cols = [c for _, c in component]
+                r0, r1 = min(rows), max(rows)
+                c0, c1 = min(cols), max(cols)
+
+                if r1 - r0 < 2 or c1 - c0 < 2:
+                    continue
+
+                comp_set = set(component)
+                box_h = r1 - r0 + 1
+                box_w = c1 - c0 + 1
+                visited = np.zeros((box_h, box_w), dtype=bool)
+
+                for br in range(box_h):
+                    for bc in range(box_w):
+                        gr, gc = r0 + br, c0 + bc
+                        if (gr, gc) in comp_set or visited[br, bc]:
+                            continue
+
+                        stack = [(br, bc)]
+                        visited[br, bc] = True
+                        region = []
+                        touches_box_edge = False
+
+                        while stack:
+                            cr, cc = stack.pop()
+                            gr, gc = r0 + cr, c0 + cc
+                            region.append((gr, gc))
+
+                            if cr == 0 or cr == box_h - 1 or cc == 0 or cc == box_w - 1:
+                                touches_box_edge = True
+
+                            for nr, nc in self._neighbors4(cr, cc, box_h, box_w):
+                                ngr, ngc = r0 + nr, c0 + nc
+                                if visited[nr, nc] or (ngr, ngc) in comp_set:
+                                    continue
+                                visited[nr, nc] = True
+                                stack.append((nr, nc))
+
+                        region_colors = [int(x[gr, gc]) for gr, gc in region
+                                         if x[gr, gc] != 0 and x[gr, gc] != barrier_color]
+
+                        if touches_box_edge:
+                            for gr, gc in region:
+                                if out[gr, gc] != barrier_color:
+                                    out[gr, gc] = 0
+                                    if x[gr, gc] != 0:
+                                        changed = True
+                            continue
+
+                        if not region_colors:
+                            continue
+
+                        counts = {}
+                        for color in region_colors:
+                            counts[color] = counts.get(color, 0) + 1
+                        fill_color = min(
+                            [color for color, cnt in counts.items() if cnt == max(counts.values())]
+                        )
+
+                        for gr, gc in region:
+                            if out[gr, gc] != barrier_color:
+                                out[gr, gc] = fill_color
+                                if x[gr, gc] != fill_color:
+                                    changed = True
+
+        return out if changed else None
 
     # -------------------------
     # pair -> line rules

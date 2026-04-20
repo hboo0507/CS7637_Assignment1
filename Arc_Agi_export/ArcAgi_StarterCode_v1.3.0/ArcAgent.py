@@ -23,6 +23,7 @@ class ArcAgent:
             print(f"\n===== Problem: {problem_name} =====")
 
         simple_rules = [
+            ("complete_missing_panel_by_separator_mirroring", self._complete_missing_panel_by_separator_mirroring),
             ("mirror_propagate_across_full_separators", self._mirror_propagate_across_full_separators),
             ("xor_top_bottom_masks_to_six", self._xor_top_bottom_masks_to_six),
             ("overlay_split_panels_left_priority", self._overlay_split_panels_left_priority),
@@ -310,6 +311,103 @@ class ArcAgent:
                     if any(np.array_equal(np.fliplr(right_block), ref) for ref in reference_pairs):
                         out[r0:r1, left_c0:left_c1] = np.fliplr(right_block)
                         changed = True
+
+        return out if changed else None
+
+    def _complete_missing_panel_by_separator_mirroring(self, x):
+        h, w = x.shape
+        colors = [int(c) for c in np.unique(x) if c != 0]
+        if not colors:
+            return None
+
+        sep_color = max(colors, key=lambda c: int(np.sum(x == c)))
+        sep_rows = [r for r in range(h) if np.all(x[r, :] == sep_color)]
+        sep_cols = [c for c in range(w) if np.all(x[:, c] == sep_color)]
+        if not sep_rows or not sep_cols:
+            return None
+
+        row_edges = [-1] + sep_rows + [h]
+        col_edges = [-1] + sep_cols + [w]
+        row_spans = [(row_edges[i] + 1, row_edges[i + 1]) for i in range(len(row_edges) - 1)]
+        col_spans = [(col_edges[i] + 1, col_edges[i + 1]) for i in range(len(col_edges) - 1)]
+
+        out = x.copy()
+        changed = False
+
+        def get_block(ri, ci):
+            r0, r1 = row_spans[ri]
+            c0, c1 = col_spans[ci]
+            if r0 >= r1 or c0 >= c1:
+                return None
+            return x[r0:r1, c0:c1]
+
+        def set_block(ri, ci, block):
+            r0, r1 = row_spans[ri]
+            c0, c1 = col_spans[ci]
+            out[r0:r1, c0:c1] = block
+
+        def nonzero(block):
+            return block is not None and np.any(block != 0)
+
+        for ri in range(len(row_spans) - 1):
+            for ci in range(len(col_spans) - 1):
+                tl = get_block(ri, ci)
+                tr = get_block(ri, ci + 1)
+                bl = get_block(ri + 1, ci)
+                br = get_block(ri + 1, ci + 1)
+                blocks = [tl, tr, bl, br]
+                present = [nonzero(b) for b in blocks]
+                if sum(present) != 3:
+                    continue
+
+                missing = present.index(False)
+                candidates = []
+
+                if missing == 0:
+                    if nonzero(tr):
+                        candidates.append(np.fliplr(tr))
+                    if nonzero(bl):
+                        candidates.append(np.flipud(bl))
+                    if nonzero(br):
+                        candidates.append(np.flipud(np.fliplr(br)))
+                elif missing == 1:
+                    if nonzero(tl):
+                        candidates.append(np.fliplr(tl))
+                    if nonzero(br):
+                        candidates.append(np.flipud(br))
+                    if nonzero(bl):
+                        candidates.append(np.flipud(np.fliplr(bl)))
+                elif missing == 2:
+                    if nonzero(tl):
+                        candidates.append(np.flipud(tl))
+                    if nonzero(br):
+                        candidates.append(np.fliplr(br))
+                    if nonzero(tr):
+                        candidates.append(np.flipud(np.fliplr(tr)))
+                else:
+                    if nonzero(tr):
+                        candidates.append(np.flipud(tr))
+                    if nonzero(bl):
+                        candidates.append(np.fliplr(bl))
+                    if nonzero(tl):
+                        candidates.append(np.flipud(np.fliplr(tl)))
+
+                if not candidates:
+                    continue
+
+                target = candidates[0]
+                if any(c.shape != target.shape or not np.array_equal(c, target) for c in candidates[1:]):
+                    continue
+
+                if missing == 0:
+                    set_block(ri, ci, target)
+                elif missing == 1:
+                    set_block(ri, ci + 1, target)
+                elif missing == 2:
+                    set_block(ri + 1, ci, target)
+                else:
+                    set_block(ri + 1, ci + 1, target)
+                changed = True
 
         return out if changed else None
 

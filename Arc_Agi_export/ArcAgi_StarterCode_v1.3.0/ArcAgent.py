@@ -23,6 +23,11 @@ class ArcAgent:
             print(f"\n===== Problem: {problem_name} =====")
 
         simple_rules = [
+            ("fit_pieces_into_base_slots", self._fit_pieces_into_base_slots),
+            ("mosaic_rot180_fliplr_bands", self._mosaic_rot180_fliplr_bands),
+            ("mirror_attach_inside_8_border", self._mirror_attach_inside_8_border),
+            ("fill_closed_barrier_with_majority_color", self._fill_closed_barrier_with_majority_color),
+            ("connect_flower_centers_with_ones", self._connect_flower_centers_with_ones),
             ("identity", lambda x: x.copy()),
             ("rot90", lambda x: np.rot90(x, 1)),
             ("rot180", lambda x: np.rot90(x, 2)),
@@ -38,9 +43,6 @@ class ArcAgent:
             ("inner_shape_recolor_from_four_markers", self._inner_shape_recolor_from_four_markers),
             ("extend_diag_from_1_and_2_blocks", self._extend_diag_from_1_and_2_blocks),
             ("sort_colors_by_frequency_vertical", self._sort_colors_by_frequency_vertical),
-            ("connect_flower_centers_with_ones", self._connect_flower_centers_with_ones),
-            ("mirror_attach_inside_8_border", self._mirror_attach_inside_8_border),
-            ("fill_closed_barrier_with_majority_color", self._fill_closed_barrier_with_majority_color),
         ]
 
         for name, rule in simple_rules:
@@ -189,6 +191,143 @@ class ArcAgent:
         top = np.hstack([x, np.fliplr(x)])
         bottom = np.hstack([np.flipud(x), np.rot90(x, 2)])
         return np.vstack([top, bottom])
+
+    def _mosaic_rot180_fliplr_bands(self, x):
+        if x.shape != (3, 3):
+            return None
+
+        rot180 = np.rot90(x, 2)
+        flipud = np.flipud(x)
+        fliplr = np.fliplr(x)
+
+        top = np.hstack([rot180, flipud, rot180])
+        middle = np.hstack([fliplr, x, fliplr])
+        bottom = np.hstack([rot180, flipud, rot180])
+        return np.vstack([top, middle, bottom])
+
+    def _unique_orientations(self, piece):
+        variants = []
+        seen = set()
+
+        candidates = [
+            piece,
+            np.rot90(piece, 1),
+            np.rot90(piece, 2),
+            np.rot90(piece, 3),
+            np.fliplr(piece),
+            np.flipud(piece),
+            np.rot90(np.fliplr(piece), 1),
+            np.rot90(np.flipud(piece), 1),
+        ]
+
+        for cand in candidates:
+            key = tuple(tuple(int(v) for v in row) for row in cand.tolist())
+            if key in seen:
+                continue
+            seen.add(key)
+            variants.append(cand)
+
+        return variants
+
+    def _fit_pieces_into_base_slots(self, x):
+        h, w = x.shape
+        all_components = self._all_nonzero_components(x)
+        if len(all_components) < 2:
+            return None
+
+        base_color = None
+        base_comp = None
+        best_score = None
+        for color, comp in all_components:
+            rows = [r for r, _ in comp]
+            if max(rows) != h - 1:
+                continue
+            score = (len(comp), color)
+            if best_score is None or score > best_score:
+                best_score = score
+                base_color = color
+                base_comp = comp
+
+        if base_comp is None:
+            return None
+
+        base_set = set(base_comp)
+        top_row = min(r for r, _ in base_comp)
+        if top_row == 0:
+            return None
+
+        min_col = min(c for _, c in base_comp)
+        max_col = max(c for _, c in base_comp)
+
+        out = np.zeros_like(x)
+        for r, c in base_comp:
+            out[r, c] = base_color
+
+        slots = []
+        c = min_col
+        while c <= max_col:
+            if x[top_row, c] != 0:
+                c += 1
+                continue
+
+            c0 = c
+            while c <= max_col and x[top_row, c] == 0:
+                c += 1
+            c1 = c - 1
+
+            if top_row - 1 < 0:
+                return None
+            if any(x[top_row - 1, cc] != 0 for cc in range(c0, c1 + 1)):
+                return None
+
+            slots.append((c0, c1))
+
+        pieces = []
+        for color, comp in all_components:
+            if color == base_color and comp == base_comp:
+                continue
+            rows = [r for r, _ in comp]
+            cols = [c for _, c in comp]
+            r0, r1 = min(rows), max(rows)
+            c0, c1 = min(cols), max(cols)
+            piece = np.zeros((r1 - r0 + 1, c1 - c0 + 1), dtype=x.dtype)
+            for rr, cc in comp:
+                piece[rr - r0, cc - c0] = color
+            pieces.append((color, comp, piece))
+
+        changed = False
+        pieces.sort(key=lambda item: -len(item[1]))
+        slots = sorted(slots, key=lambda span: span[1] - span[0] + 1)
+        used_pieces = set()
+
+        for c0, c1 in slots:
+            slot_w = c1 - c0 + 1
+            matched = False
+
+            for piece_idx, (color, comp, piece) in enumerate(pieces):
+                if piece_idx in used_pieces:
+                    continue
+
+                for oriented in self._unique_orientations(piece):
+                    occ = oriented != 0
+                    oh, ow = occ.shape
+                    if oh != 2 or ow != slot_w:
+                        continue
+                    if not np.all(occ):
+                        continue
+
+                    for dr in range(2):
+                        for dc in range(slot_w):
+                            out[top_row - 1 + dr, c0 + dc] = int(oriented[dr, dc])
+                    used_pieces.add(piece_idx)
+                    changed = True
+                    matched = True
+                    break
+
+                if matched:
+                    break
+
+        return out if changed else None
 
     def _find_flower_centers(self, x, color=2):
         h, w = x.shape

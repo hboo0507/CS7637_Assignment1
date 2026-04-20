@@ -39,6 +39,7 @@ class ArcAgent:
             ("extend_diag_from_1_and_2_blocks", self._extend_diag_from_1_and_2_blocks),
             ("sort_colors_by_frequency_vertical", self._sort_colors_by_frequency_vertical),
             ("connect_flower_centers_with_ones", self._connect_flower_centers_with_ones),
+            ("mirror_attach_inside_8_border", self._mirror_attach_inside_8_border),
             ("fill_closed_barrier_with_majority_color", self._fill_closed_barrier_with_majority_color),
         ]
 
@@ -232,6 +233,86 @@ class ArcAgent:
                     if out[r, c] == 0:
                         out[r, c] = 1
                         changed = True
+
+        return out if changed else None
+
+    def _mirror_attach_inside_8_border(self, x):
+        out = x.copy()
+        changed = False
+        h, w = x.shape
+
+        for comp in self._connected_components_of_color(x, 8):
+            comp_set = set(comp)
+
+            rows = [r for r, _ in comp]
+            cols = [c for _, c in comp]
+            border_h = max(rows) - min(rows) + 1
+            border_w = max(cols) - min(cols) + 1
+
+            reachable = np.zeros((h, w), dtype=bool)
+            stack = []
+
+            for r in range(h):
+                for c in [0, w - 1]:
+                    if (r, c) not in comp_set and not reachable[r, c]:
+                        reachable[r, c] = True
+                        stack.append((r, c))
+            for c in range(w):
+                for r in [0, h - 1]:
+                    if (r, c) not in comp_set and not reachable[r, c]:
+                        reachable[r, c] = True
+                        stack.append((r, c))
+
+            while stack:
+                r, c = stack.pop()
+                for nr, nc in self._neighbors4(r, c, h, w):
+                    if (nr, nc) in comp_set or reachable[nr, nc]:
+                        continue
+                    reachable[nr, nc] = True
+                    stack.append((nr, nc))
+
+            visited = np.zeros((h, w), dtype=bool)
+            for r in range(h):
+                for c in range(w):
+                    if (r, c) in comp_set or reachable[r, c] or visited[r, c]:
+                        continue
+
+                    region = []
+                    region_stack = [(r, c)]
+                    visited[r, c] = True
+
+                    while region_stack:
+                        cr, cc = region_stack.pop()
+                        region.append((cr, cc))
+                        for nr, nc in self._neighbors4(cr, cc, h, w):
+                            if (nr, nc) in comp_set or reachable[nr, nc] or visited[nr, nc]:
+                                continue
+                            visited[nr, nc] = True
+                            region_stack.append((nr, nc))
+
+                    object_cells = [(rr, cc) for rr, cc in region if x[rr, cc] != 0 and x[rr, cc] != 8]
+                    if not object_cells:
+                        continue
+
+                    reg_rows = [rr for rr, _ in region]
+                    reg_cols = [cc for _, cc in region]
+                    r0, r1 = min(reg_rows), max(reg_rows)
+                    c0, c1 = min(reg_cols), max(reg_cols)
+
+                    if border_w >= border_h:
+                        center_sum = c0 + c1
+                        for rr, cc in object_cells:
+                            mirror_c = center_sum - cc
+                            if (rr, mirror_c) in region and out[rr, mirror_c] == 0:
+                                out[rr, mirror_c] = int(x[rr, cc])
+                                changed = True
+                    else:
+                        center_sum = r0 + r1
+                        for rr, cc in object_cells:
+                            mirror_r = center_sum - rr
+                            if (mirror_r, cc) in region and out[mirror_r, cc] == 0:
+                                out[mirror_r, cc] = int(x[rr, cc])
+                                changed = True
 
         return out if changed else None
 

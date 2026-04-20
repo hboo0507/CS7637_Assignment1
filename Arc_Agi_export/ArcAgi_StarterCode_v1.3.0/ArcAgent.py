@@ -72,6 +72,21 @@ class ArcAgent:
                 if self._should_debug(problem_name):
                     print("[learned] extract_single_input_color_rule crashed:", e)
 
+        binary_or_rule = self._make_binary_or_panel_rule(train_pairs, problem_name)
+        if self._should_debug(problem_name):
+            print("[learned] binary_or_panel_rule is None?", binary_or_rule is None)
+        if binary_or_rule is not None:
+            try:
+                pred = binary_or_rule(test_input)
+                if self._should_debug(problem_name):
+                    print("[learned] binary_or_panel_rule pred is None?", pred is None)
+                    if pred is not None:
+                        print(pred.tolist())
+                self._append_if_new(predictions, pred)
+            except Exception as e:
+                if self._should_debug(problem_name):
+                    print("[learned] binary_or_panel_rule crashed:", e)
+
         for mode in ["and", "or", "xor", "nor"]:
             rule = self._make_panel_rule(train_pairs, mode, problem_name)
             if self._should_debug(problem_name):
@@ -389,6 +404,39 @@ class ArcAgent:
             out = np.zeros_like(x)
             out[x == chosen_input_color] = chosen_output_color
             return out
+
+        return rule
+
+    def _make_binary_or_panel_rule(self, train_pairs, problem_name=""):
+        for idx, (inp, out) in enumerate(train_pairs):
+            split = self._split_by_separator(inp)
+            if split is None:
+                if self._should_debug(problem_name):
+                    print(f"  -> binary_or_panel fail at train {idx}: no separator")
+                return None
+
+            left, right = split
+            if left.shape != right.shape or left.shape != out.shape:
+                if self._should_debug(problem_name):
+                    print(f"  -> binary_or_panel fail at train {idx}: shape mismatch")
+                return None
+
+            candidate = ((left != 0) | (right != 0)).astype(inp.dtype)
+            if not np.array_equal(candidate, out):
+                if self._should_debug(problem_name):
+                    print(f"  -> binary_or_panel fail at train {idx}: candidate mismatch")
+                return None
+
+        def rule(x):
+            split = self._split_by_separator(x)
+            if split is None:
+                return None
+
+            left, right = split
+            if left.shape != right.shape:
+                return None
+
+            return ((left != 0) | (right != 0)).astype(x.dtype)
 
         return rule
 

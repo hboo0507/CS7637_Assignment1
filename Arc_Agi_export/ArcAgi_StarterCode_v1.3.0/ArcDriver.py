@@ -1,5 +1,7 @@
 import json
+import os
 import os.path
+import sys
 
 import numpy as np
 
@@ -58,10 +60,17 @@ def load_arc_problems(path: str, problem_data: list[str]) -> list[ArcProblem]:
 
 
 if __name__ == "__main__":
-    
-    # Here you can use this to open other milestone data directories for running against
-    #  you'll should copy this code and change the path to the milestone you want to load (B, C or D)
-    milestone_path = os.path.join('Milestones', 'C')
+    # Default to Milestone D, but allow overriding with:
+    #   python ArcDriver.py C
+    # or:
+    #   ARC_MILESTONE=C python ArcDriver.py
+    milestone_name = 'D'
+    if len(sys.argv) > 1:
+        milestone_name = sys.argv[1].strip().upper()
+    else:
+        milestone_name = os.environ.get('ARC_MILESTONE', milestone_name).strip().upper()
+
+    milestone_path = os.path.join('Milestones', milestone_name)
     milestone_data: list[str] = os.listdir(milestone_path)
 
     arc_milestone_problems: list[ArcProblem] = load_arc_problems(milestone_path, milestone_data)

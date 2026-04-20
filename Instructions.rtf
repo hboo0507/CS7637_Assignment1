@@ -1,0 +1,268 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2869
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 HelveticaNeue;}
+{\colortbl;\red255\green255\blue255;\red1\green27\blue59;\red223\green223\blue223;\red30\green40\blue49;
+\red6\green58\blue141;\red239\green241\blue241;\red226\green229\blue231;}
+{\*\expandedcolortbl;;\cssrgb\c0\c14510\c29804;\cssrgb\c89804\c89804\c89804;\cssrgb\c15294\c20784\c25098;
+\cssrgb\c0\c30980\c62353;\cssrgb\c94902\c95686\c95686;\cssrgb\c90980\c91765\c92549;}
+{\*\listtable{\list\listtemplateid1\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid1\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid1}}
+{\*\listoverridetable{\listoverride\listid1\listoverridecount0\ls1}}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\sa120\partightenfactor0
+
+\f0\fs48 \cf2 \cb3 \expnd0\expndtw0\kerning0
+ARC-AGI Project: Milestone D\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\fs32 \cf4 \cb1 First, make sure to read the\'a0{\field{\*\fldinst{HYPERLINK "https://gatech.instructure.com/courses/498210/pages/arc-agi-project-overview"}}{\fldrslt \cf5 \ul \ulc5 full project overview}}. It contains instructions for the project as a whole and getting started with the code. This page describes only what you should do for Milestone D within the broader context of that project overview.\
+For Milestone D, your goal is to simply demonstrate that you have made some progress in creating an agent that can address the Set D problems of our ARC-AGI test, especially the Training D and Test D problems. 50% of your grade on Milestone D is earned by meeting the minimum performance requirements; 50% of your grade is earned by completing the milestone journal.\
+\pard\pardeftab720\sa120\partightenfactor0
+
+\fs48 \cf2 \cb3 Performance Requirement\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\fs32 \cf4 \cb1 50% of your Milestone grade comes from your agent's performance on the Set D problems: 25% from the Training D problems, and 25% from the Test D problems. To earn the full 25% on each set, you must answer at least 6 problems in that set. Answering more than 6 problems does not grant any extra credit, but it does get you ahead for the Final ARC-AGI project, where you'll submit one final agent that runs against all 96 ARC-AGI problems.\
+Answering fewer than 6 questions will earn the equivalent fraction of the 25% (e.g. 20.8 points for answering 5/6, 16.7 for 4/6, 12.5 for 3/6, etc.).\
+\pard\pardeftab720\sa120\partightenfactor0
+
+\fs36 \cf2 Performance Submission Instructions\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\fs32 \cf4 To fulfill the Performance Requirement, follow the directions on the {\field{\*\fldinst{HYPERLINK "https://gatech.instructure.com/courses/498210/pages/arc-agi-project-overview"}}{\fldrslt \cf5 \ul \ulc5 full project overview}}\'a0for submitting to Gradescope, and then submit your agent to the Milestone D assignment.\
+After submitting to the Milestone D assignment in Gradescope, make sure to select which submission you want to have count for your graded submission. By default, Gradescope will use your latest submission, but you may want to use an earlier one. After the deadline, this will be exported to Canvas to calculate your final Milestone grade.\
+You may submit up to 40 times prior to the deadline. The large majority of students do not need nearly that many submissions, so do not feel like you should use all 40; this cap is in place primarily to prevent brute force methods for farming information about patterns in hidden test cases or submitting highly random agents hoping for a lucky submission. Note that Gradescope has no way for us to increase your individual number of submissions, so we cannot return submissions to you in the case of errors or other issues, but you should have more than enough submissions to handle errors if they arise.\
+This is an individual assignment.\'a0All work you submit should be your own. Make sure to cite any sources you reference or code you use (in accordance with the broader class policy on code reuse).\
+\pard\pardeftab720\sa120\partightenfactor0
+
+\fs48 \cf2 \cb3 Milestone Journal\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\fs32 \cf4 \cb1 In addition to submitting an agent to Gradescope, you will also submit a brief milestone journal to the Milestone D assignment in Canvas. Your Milestone Journal must be written in {\field{\*\fldinst{HYPERLINK "https://gatech.instructure.com/courses/498210/files/folder/Journal%20Templates#"}}{\fldrslt \cf5 \ul \ulc5 JDF format}}. There is no maximum length; we expect most submissions to be around 5 pages, but you may write more if you would like. Writing the journal is intended to be a useful exercise for you first and foremost: it should let you externalize and formalize your ideas, it should let you get feedback from your classmates, and it should let your classmates learn from you. Your journal should not include actual code; it should just include a description of your agent\'92s approach.\
+Note that your Milestone D should be all original content; if there is content that you wrote for a previous Milestone that is still pertinent, you may refer back to that content again (including quoting yourself), and then go on to discuss what has changed or what is new (or, why the same content you wrote previously is still so applicable).\
+If you need to quote large portions of your prior writing, you can use a blockquote, or include your prior Milestone in an appendix that you refer to. The important element is for TAs and classmates to be able to identify the new content.\
+For Milestone D, you should answer the following questions:\
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls1\ilvl0\cf4 \kerning1\expnd0\expndtw0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+How does your agent currently function? Depending on the inner workings of your agent, there may be a lot of different ways to describe this. For example, does it select from multiple problem-solving approaches depending on what it sees in the problem? Does it perform shape recognition or direct pixel comparison? Does it generate multiple variations of one solution approach, or does it generate a separate solution for each of multiple approaches? You need not answer these specific questions, but they are examples of ways you might describe your agent\'92s design.\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+How well does your agent currently perform? How many problems does it get right on the Set D problems?\'a0\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+What problems does your agent perform well on? What problems (if any) does it struggle on? Why do you think it performs well on some but struggles on others (if any)?\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+How efficient is your agent? Does it take a long time to run (give specific metrics)? Does it slow down significantly on certain kinds of problems? If so, by how much? Why do you think your agent runs slower on certain problems?\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+How do you plan to improve your agent\'92s performance on these problems before the final project submission?\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+What feedback would you hope to get from classmates about how your agent could do better? What are some of the challenges you are facing (or think you will face later) that could benefit from someone else\'92s feedback?\
+\pard\pardeftab720\sa120\partightenfactor0
+
+\fs36 \cf2 Journal Submission Instructions\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\fs32 \cf4 Complete your assignment {\field{\*\fldinst{HYPERLINK "https://drive.google.com/open?id=1xDYIomn9e9FxbIeFcsclSbXHTtHROD1j"}}{\fldrslt \cf5 \ul \ulc5 using JDF\ulnone \
+\pard\pardeftab720\partightenfactor0
+\cf5 \ul Links to an external site.\ulnone \
+}}\pard\pardeftab720\sa240\partightenfactor0
+\cf4 , then save your submission as a PDF. Assignments should be submitted to the corresponding assignment submission page in {\field{\*\fldinst{HYPERLINK "https://gatech.instructure.com/courses/498210/assignments"}}{\fldrslt \cf5 \ul \ulc5 Canvas}}. You should submit a single PDF for this assignment. If your assignment involves things (like videos, working software prototypes, etc.) that cannot be provided in PDF, you should provide them separately (through OneDrive, Google Drive, Dropbox, etc.) and submit a PDF that links to or otherwise describes how to access that material. Make sure that any content outside the PDF is, at a minimum, accessible to anyone with a Georgia Tech account; we recommend confirming in an incognito browser that any content outside the uploaded PDF is available prior to the deadline as no credit can be given for inaccessible content.\
+Participating in peer review is optional but highly encouraged, and is the primary expected way to earn points toward your {\field{\*\fldinst{HYPERLINK "https://gatech.instructure.com/courses/498210/assignments/2344398"}}{\fldrslt \cf5 \ul \ulc5 class participation grade}}. To participate in peer review, {\field{\*\fldinst{HYPERLINK "https://gatech.instructure.com/courses/498210/assignments/2351462"}}{\fldrslt \cf5 \ul \ulc5 submit to the separate peer review assignment}} in Canvas to share your assignment with peers and receive assignments to review in turn. Review the {\field{\*\fldinst{HYPERLINK "https://gatech.instructure.com/courses/498210/pages/primer-on-peer-review"}}{\fldrslt \cf5 \ul \ulc5 Primer on Peer Review page}} for more details.\
+Late work is not accepted without advanced agreement except in cases of medical or family emergencies. In the case of such an emergency, please {\field{\*\fldinst{HYPERLINK "https://studentlife.gatech.edu/request-assistance"}}{\fldrslt \cf5 \ul \ulc5 contact the Dean of Students\ulnone \
+\pard\pardeftab720\partightenfactor0
+\cf5 \ul Links to an external site.\ulnone \
+}}\pard\pardeftab720\sa240\partightenfactor0
+\cf4 .\
+This is an individual assignment. Even if you already plan to work on a team for the project, this assignment should still be completed individually.\
+\pard\pardeftab720\sa120\partightenfactor0
+
+\fs48 \cf2 \cb3 Grading Information\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\fs32 \cf4 \cb1 Your report is worth 50% of your milestone grade. As such, your report will be graded on a 10-point scale coinciding with a rubric designed to mirror the questions above. Make sure to answer those questions; if any of the questions are irrelevant to the design of your agent, explain why.\
+\pard\pardeftab720\sa120\partightenfactor0
+
+\fs57\fsmilli28800 \cf4 Rubric\
+\pard\pardeftab720\partightenfactor0
+
+\fs32 \cf4 \cb6 ARC-AGI Milestone D Journal Rubric\cb1 \
+\pard\pardeftab720\qc\partightenfactor0
+\cf4 ARC-AGI Milestone D Journal Rubric\
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \trbrdrt\brdrnil \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalc \clcbpat6 \clwWidth2944\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt140 \clpadl200 \clpadb140 \clpadr200 \gaph\cellx2880
+\clvertalc \clcbpat6 \clwWidth7216\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt140 \clpadl200 \clpadb140 \clpadr200 \gaph\cellx5760
+\clvertalc \clcbpat6 \clwWidth959\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt140 \clpadl200 \clpadb140 \clpadr200 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\qc\partightenfactor0
+\cf4 Criteria\cell 
+\pard\intbl\itap1\pardeftab720\qc\partightenfactor0
+\cf4 Ratings\cell 
+\pard\intbl\itap1\pardeftab720\qc\partightenfactor0
+\cf4 Pts\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2944\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt240 \clpadl200 \clpadb240 \clpadr200 \gaph\cellx2880
+\clvertalc \clshdrawnil \clwWidth7616\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadl0 \clpadr0 \gaph\cellx5760
+\clvertalc \clshdrawnil \clwWidth959\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt140 \clpadl200 \clpadb140 \clpadr200 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf4 This criterion is linked to a Learning Outcome\
+JDF Format\
+Does your submission conform to the important parts of JDF formatting\'97that is, margin size, line spacing, font, and font size? (Deduction only)\
+\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs27\fsmilli13600 \cf4 0 pts\
+Correctly Formatted\
+Your essay conforms to the important portions of JDF formatting.\
+0 pts\
+JDF Error [Deduction]\
+Your submission violates JDF format in one or more substantive ways: font size, typeface, margins, or line spacing. Comments may have more details. As a result, you have been assigned a negative score on this rubric item to deduct from your assignment score.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs32 \cf4 0 pts\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2944\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt240 \clpadl200 \clpadb240 \clpadr200 \gaph\cellx2880
+\clvertalc \clshdrawnil \clwWidth7616\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadl0 \clpadr0 \gaph\cellx5760
+\clvertalc \clshdrawnil \clwWidth959\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt140 \clpadl200 \clpadb140 \clpadr200 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf4 This criterion is linked to a Learning Outcome\
+Agent Description\
+3 points: How does your agent currently function?\
+\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs27\fsmilli13600 \cf4 3 pts\
+Full Credit\
+You have adequately and thoroughly described your agent's operations.\
+2 pts\
+2/3rds Credit\
+You have made an attempt to describe your agent's operations, but your description is lacking a couple critical details, such as adequate detail on how it implements the method it uses. Comments may have more details.\
+1 pts\
+1/3rd Credit\
+You have made an attempt to describe your agent's operations, but your description is lacking several significant details, such as what strategy it implements and the details of that strategy's implementation. Comments may have more details.\
+0 pts\
+No Credit\
+Your journal makes little to no effort to describe how your agent operates.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs32 \cf4 3 pts\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2944\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt240 \clpadl200 \clpadb240 \clpadr200 \gaph\cellx2880
+\clvertalc \clshdrawnil \clwWidth7616\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadl0 \clpadr0 \gaph\cellx5760
+\clvertalc \clshdrawnil \clwWidth959\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt140 \clpadl200 \clpadb140 \clpadr200 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf4 This criterion is linked to a Learning Outcome\
+Agent Performance\
+1 points: How well does your agent currently perform? How many problems does it get right on the Set D?\
+\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs27\fsmilli13600 \cf4 1 pts\
+Full Credit\
+You have adequately described your agent's performance on this milestone's problems, including how many problems it answers correctly across the two subsets (Training D and Test D).\
+0.5 pts\
+1/2 Credit\
+You have referenced your agent's performance, but you have not adequately described it in detail (such as including some, but not all, of the agent's scores across the Training D and Test D sets). Comments may have more details.\
+0 pts\
+No Credit\
+Your journal makes little to no attempt to describe the performance of your agent in terms of the number of problems it solves.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs32 \cf4 1 pts\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2944\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt240 \clpadl200 \clpadb240 \clpadr200 \gaph\cellx2880
+\clvertalc \clshdrawnil \clwWidth7616\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadl0 \clpadr0 \gaph\cellx5760
+\clvertalc \clshdrawnil \clwWidth959\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt140 \clpadl200 \clpadb140 \clpadr200 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf4 This criterion is linked to a Learning Outcome\
+Agent Success\
+1.5 points: What problems does your agent perform well on?\
+\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs27\fsmilli13600 \cf4 1.5 pts\
+Full Credit\
+You have what kinds of problems your agent currently succeeds on, either by naming specific problems it can solve (and why) or by naming the general types of problems your agent is equipped to solve.\
+0.75 pts\
+1/2 Credit\
+You have made some attempt to describe where your agent succeeds, but your answer is lacking in some depth; for instance, it is not sufficient to just name which problems it gets right, but rather you should describe how or why it is able to solve those problems. Comments may have more details.\
+0 pts\
+No Credit\
+Your journal makes little to no attempt to describe which problems your agent is able to solve and why.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs32 \cf4 1.5 pts\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2944\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt240 \clpadl200 \clpadb240 \clpadr200 \gaph\cellx2880
+\clvertalc \clshdrawnil \clwWidth7616\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadl0 \clpadr0 \gaph\cellx5760
+\clvertalc \clshdrawnil \clwWidth959\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt140 \clpadl200 \clpadb140 \clpadr200 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf4 This criterion is linked to a Learning Outcome\
+Agent Struggles\
+1.5 points: What problems (if any) does it struggle on? Why does it struggle?\
+\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs27\fsmilli13600 \cf4 1.5 pts\
+Full Credit\
+Either your agent does not struggle on any problems, or you have discussed in adequate detail the types of problems it currently struggles on and why it struggles on them.\
+0.75 pts\
+1/2 Credit\
+You have made some attempt to describe where your agent struggles and why, but your answer is lacking in some depth or specificity; it is not sufficient, for example, to just list the problems it gets wrong, but rather you should explore why. Comments may have more details.\
+0 pts\
+No Credit\
+Your journal makes little to no attempt to describe what problems your agent struggles on and why.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs32 \cf4 1.5 pts\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2944\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt240 \clpadl200 \clpadb240 \clpadr200 \gaph\cellx2880
+\clvertalc \clshdrawnil \clwWidth7616\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadl0 \clpadr0 \gaph\cellx5760
+\clvertalc \clshdrawnil \clwWidth959\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt140 \clpadl200 \clpadb140 \clpadr200 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf4 This criterion is linked to a Learning Outcome\
+Agent Efficiency\
+1 point: How efficient is your agent? Does it take a long time to run? Does it slow down significantly on certain kinds of problems? (Note: Using Big O notation is recommended, but not required; it is just easier to know you've adequately answered the prompt if you include a Big O analysis.)\
+\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs27\fsmilli13600 \cf4 1 pts\
+Full Credit\
+You have adequately described your agent's efficiency, including with reference to how its runtime changes as problems get more complex.\
+0.5 pts\
+1/2 Credit\
+You have made reference to your agent's efficiency, but your answer is lacking in sufficient detail, such as an exploration of how your agent's runtime changes as problem complexity rises. Comments may have more details.\
+0 pts\
+No Credit\
+Your journal makes little to no attempt to describe your agent's runtime efficiency.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs32 \cf4 1 pts\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \trbrdrl\brdrnil \trbrdrt\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2944\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt240 \clpadl200 \clpadb240 \clpadr200 \gaph\cellx2880
+\clvertalc \clshdrawnil \clwWidth7616\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadl0 \clpadr0 \gaph\cellx5760
+\clvertalc \clshdrawnil \clwWidth959\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf7 \clbrdrl\brdrs\brdrw20\brdrcf7 \clbrdrb\brdrs\brdrw20\brdrcf7 \clbrdrr\brdrs\brdrw20\brdrcf7 \clpadt140 \clpadl200 \clpadb140 \clpadr200 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf4 This criterion is linked to a Learning Outcome\
+Agent Improvement\
+2 points: How do you plan to improve your agent\'92s performance on these problems before the final project submission?\
+\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs27\fsmilli13600 \cf4 2 pts\
+Full Credit\
+You have adequately described a plan for improving your agent's performance on this milestone's sets for the final project submission (or alternatively, your agent's current performance leaves no room for improvement).\
+1 pts\
+1/2 Credit\
+You have made reference to improving your agent's performance on this milestone's sets for the final project submission, but your plan lacks specific actionable details or identifiable plans. Comments may have more details.\
+0 pts\
+No Credit\
+Your journal makes little to no attempt to describe a plan for improving your agent.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs32 \cf4 2 pts\cell \lastrow\row
+\pard\pardeftab720\partightenfactor0
+\cf4 Total Points: 10}

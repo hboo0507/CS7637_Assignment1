@@ -227,7 +227,6 @@ class ArcAgent:
     def _fill_closed_barrier_with_majority_color(self, x):
         out = x.copy()
         changed = False
-        h, w = x.shape
 
         for barrier_color in [int(c) for c in np.unique(x) if c != 0]:
             for component in self._connected_components_of_color(x, barrier_color):
@@ -274,11 +273,6 @@ class ArcAgent:
                                          if x[gr, gc] != 0 and x[gr, gc] != barrier_color]
 
                         if touches_box_edge:
-                            for gr, gc in region:
-                                if out[gr, gc] != barrier_color:
-                                    out[gr, gc] = 0
-                                    if x[gr, gc] != 0:
-                                        changed = True
                             continue
 
                         if not region_colors:

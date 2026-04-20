@@ -227,69 +227,68 @@ class ArcAgent:
     def _fill_closed_barrier_with_majority_color(self, x):
         out = x.copy()
         changed = False
+        h, w = x.shape
 
         for barrier_color in [int(c) for c in np.unique(x) if c != 0]:
-            for component in self._connected_components_of_color(x, barrier_color):
-                rows = [r for r, _ in component]
-                cols = [c for _, c in component]
-                r0, r1 = min(rows), max(rows)
-                c0, c1 = min(cols), max(cols)
+            reachable = np.zeros((h, w), dtype=bool)
+            stack = []
 
-                if r1 - r0 < 2 or c1 - c0 < 2:
-                    continue
+            for r in range(h):
+                for c in [0, w - 1]:
+                    if x[r, c] != barrier_color and not reachable[r, c]:
+                        reachable[r, c] = True
+                        stack.append((r, c))
+            for c in range(w):
+                for r in [0, h - 1]:
+                    if x[r, c] != barrier_color and not reachable[r, c]:
+                        reachable[r, c] = True
+                        stack.append((r, c))
 
-                comp_set = set(component)
-                box_h = r1 - r0 + 1
-                box_w = c1 - c0 + 1
-                visited = np.zeros((box_h, box_w), dtype=bool)
+            while stack:
+                r, c = stack.pop()
+                for nr, nc in self._neighbors4(r, c, h, w):
+                    if x[nr, nc] == barrier_color or reachable[nr, nc]:
+                        continue
+                    reachable[nr, nc] = True
+                    stack.append((nr, nc))
 
-                for br in range(box_h):
-                    for bc in range(box_w):
-                        gr, gc = r0 + br, c0 + bc
-                        if (gr, gc) in comp_set or visited[br, bc]:
-                            continue
+            visited = np.zeros((h, w), dtype=bool)
+            for r in range(h):
+                for c in range(w):
+                    if x[r, c] == barrier_color or reachable[r, c] or visited[r, c]:
+                        continue
 
-                        stack = [(br, bc)]
-                        visited[br, bc] = True
-                        region = []
-                        touches_box_edge = False
+                    region = []
+                    region_stack = [(r, c)]
+                    visited[r, c] = True
 
-                        while stack:
-                            cr, cc = stack.pop()
-                            gr, gc = r0 + cr, c0 + cc
-                            region.append((gr, gc))
+                    while region_stack:
+                        cr, cc = region_stack.pop()
+                        region.append((cr, cc))
+                        for nr, nc in self._neighbors4(cr, cc, h, w):
+                            if x[nr, nc] == barrier_color or reachable[nr, nc] or visited[nr, nc]:
+                                continue
+                            visited[nr, nc] = True
+                            region_stack.append((nr, nc))
 
-                            if cr == 0 or cr == box_h - 1 or cc == 0 or cc == box_w - 1:
-                                touches_box_edge = True
+                    region_colors = [
+                        int(x[rr, cc]) for rr, cc in region
+                        if x[rr, cc] != 0 and x[rr, cc] != barrier_color
+                    ]
+                    if not region_colors:
+                        continue
 
-                            for nr, nc in self._neighbors4(cr, cc, box_h, box_w):
-                                ngr, ngc = r0 + nr, c0 + nc
-                                if visited[nr, nc] or (ngr, ngc) in comp_set:
-                                    continue
-                                visited[nr, nc] = True
-                                stack.append((nr, nc))
+                    counts = {}
+                    for color in region_colors:
+                        counts[color] = counts.get(color, 0) + 1
+                    max_count = max(counts.values())
+                    fill_color = min(color for color, cnt in counts.items() if cnt == max_count)
 
-                        region_colors = [int(x[gr, gc]) for gr, gc in region
-                                         if x[gr, gc] != 0 and x[gr, gc] != barrier_color]
-
-                        if touches_box_edge:
-                            continue
-
-                        if not region_colors:
-                            continue
-
-                        counts = {}
-                        for color in region_colors:
-                            counts[color] = counts.get(color, 0) + 1
-                        fill_color = min(
-                            [color for color, cnt in counts.items() if cnt == max(counts.values())]
-                        )
-
-                        for gr, gc in region:
-                            if out[gr, gc] != barrier_color:
-                                out[gr, gc] = fill_color
-                                if x[gr, gc] != fill_color:
-                                    changed = True
+                    for rr, cc in region:
+                        if out[rr, cc] != fill_color:
+                            out[rr, cc] = fill_color
+                            if x[rr, cc] != fill_color:
+                                changed = True
 
         return out if changed else None
 

@@ -23,6 +23,10 @@ class ArcAgent:
             print(f"\n===== Problem: {problem_name} =====")
 
         simple_rules = [
+            ("trace_threes_between_single_one_and_two", self._trace_threes_between_single_one_and_two),
+            ("surround_holey_ones_with_twos_and_fill_inner_edge_with_threes", self._surround_holey_ones_with_twos_and_fill_inner_edge_with_threes),
+            ("count_panel_blocks_to_staircase", self._count_panel_blocks_to_staircase),
+            ("marker_frame_to_small_staircase", self._marker_frame_to_small_staircase),
             ("recolor_cropped_shape_from_clue_pairs", self._recolor_cropped_shape_from_clue_pairs),
             ("expand_single_two_to_v_with_inner_diagonals", self._expand_single_two_to_v_with_inner_diagonals),
             ("draw_line_between_twos_with_one_to_three", self._draw_line_between_twos_with_one_to_three),
@@ -98,6 +102,21 @@ class ArcAgent:
             except Exception as e:
                 if self._should_debug(problem_name):
                     print("[learned] binary_or_panel_rule crashed:", e)
+
+        marker_shape_rule = self._make_marker_shape_by_nearest_fold_signature_rule(train_pairs, problem_name)
+        if self._should_debug(problem_name):
+            print("[learned] marker_shape_by_nearest_fold_signature_rule is None?", marker_shape_rule is None)
+        if marker_shape_rule is not None:
+            try:
+                pred = marker_shape_rule(test_input)
+                if self._should_debug(problem_name):
+                    print("[learned] marker_shape_by_nearest_fold_signature_rule pred is None?", pred is None)
+                    if pred is not None:
+                        print(pred.tolist())
+                self._append_if_new(predictions, pred)
+            except Exception as e:
+                if self._should_debug(problem_name):
+                    print("[learned] marker_shape_by_nearest_fold_signature_rule crashed:", e)
 
         for mode in ["and", "or", "xor", "nor"]:
             rule = self._make_panel_rule(train_pairs, mode, problem_name)
@@ -958,6 +977,270 @@ class ArcAgent:
             out[:cnt, col_idx] = color
 
         return out
+
+    # -------------------------
+    # single 1 / single 2 path rule
+    # -------------------------
+    def _trace_threes_between_single_one_and_two(self, x):
+        ones = np.argwhere(x == 1)
+        twos = np.argwhere(x == 2)
+        others = [int(c) for c in np.unique(x) if c not in (0, 1, 2)]
+        if len(ones) != 1 or len(twos) != 1 or others:
+            return None
+
+        (r1, c1) = [int(v) for v in ones[0]]
+        (r2, c2) = [int(v) for v in twos[0]]
+        dr = 1 if r1 > r2 else -1 if r1 < r2 else 0
+        dc = 1 if c1 > c2 else -1 if c1 < c2 else 0
+        if dr == 0 and dc == 0:
+            return None
+
+        out = x.copy()
+        cr, cc = r2, c2
+
+        # Always take one diagonal step first when possible.
+        if dr != 0 and dc != 0:
+            cr += dr
+            cc += dc
+            if (cr, cc) != (r1, c1):
+                out[cr, cc] = 3
+
+        while True:
+            rem_r = r1 - cr
+            rem_c = c1 - cc
+            if max(abs(rem_r), abs(rem_c)) <= 1:
+                break
+
+            if abs(rem_r) == abs(rem_c):
+                cr += 1 if rem_r > 0 else -1
+                cc += 1 if rem_c > 0 else -1
+            elif abs(rem_r) > abs(rem_c):
+                cr += 1 if rem_r > 0 else -1
+            else:
+                cc += 1 if rem_c > 0 else -1
+
+            if (cr, cc) == (r1, c1):
+                break
+            out[cr, cc] = 3
+
+        return out
+
+    # -------------------------
+    # add outer 2-ring to hole-bearing 1-components and fill
+    # hole cells adjacent to the component with 3
+    # -------------------------
+    def _surround_holey_ones_with_twos_and_fill_inner_edge_with_threes(self, x):
+        h, w = x.shape
+        out = x.copy()
+        changed = False
+
+        comps = self._connected_components_of_color(x, 1)
+        if not comps:
+            return None
+
+        for comp in comps:
+            comp_set = set(comp)
+            rows = [r for r, _ in comp]
+            cols = [c for _, c in comp]
+            r0, r1 = min(rows), max(rows)
+            c0, c1 = min(cols), max(cols)
+
+            reachable = np.zeros((h, w), dtype=bool)
+            stack = []
+            for r in range(r0, r1 + 1):
+                for c in range(c0, c1 + 1):
+                    if r in (r0, r1) or c in (c0, c1):
+                        if (r, c) not in comp_set and x[r, c] == 0 and not reachable[r, c]:
+                            reachable[r, c] = True
+                            stack.append((r, c))
+
+            while stack:
+                r, c = stack.pop()
+                for nr, nc in self._neighbors4(r, c, h, w):
+                    if nr < r0 or nr > r1 or nc < c0 or nc > c1:
+                        continue
+                    if (nr, nc) in comp_set or x[nr, nc] != 0 or reachable[nr, nc]:
+                        continue
+                    reachable[nr, nc] = True
+                    stack.append((nr, nc))
+
+            holes = []
+            for r in range(r0, r1 + 1):
+                for c in range(c0, c1 + 1):
+                    if x[r, c] == 0 and not reachable[r, c] and (r, c) not in comp_set:
+                        holes.append((r, c))
+
+            if not holes:
+                continue
+
+            # 8-neighbor outer ring.
+            for r, c in comp:
+                for nr in range(r - 1, r + 2):
+                    for nc in range(c - 1, c + 2):
+                        if 0 <= nr < h and 0 <= nc < w and (nr, nc) not in comp_set and x[nr, nc] == 0:
+                            if out[nr, nc] == 0:
+                                out[nr, nc] = 2
+                                changed = True
+
+            for r, c in holes:
+                near_component = False
+                for nr in range(r - 1, r + 2):
+                    for nc in range(c - 1, c + 2):
+                        if (nr, nc) == (r, c):
+                            continue
+                        if 0 <= nr < h and 0 <= nc < w and (nr, nc) in comp_set:
+                            near_component = True
+                            break
+                    if near_component:
+                        break
+
+                if near_component:
+                    out[r, c] = 3
+                    changed = True
+                elif out[r, c] == 2:
+                    out[r, c] = 0
+
+        return out
+
+    # -------------------------
+    # count monochrome 2x2 blocks in separator panels -> staircase
+    # -------------------------
+    def _count_panel_blocks_to_staircase(self, x):
+        colors = [int(c) for c in np.unique(x) if c != 0]
+        if not colors:
+            return None
+
+        # The dominant separator color forms full rows/cols.
+        sep_color = max(colors, key=lambda color: int(np.sum(x == color)))
+        counts = {}
+
+        h, w = x.shape
+        for r in range(h - 1):
+            for c in range(w - 1):
+                block = x[r:r + 2, c:c + 2]
+                vals = np.unique(block)
+                if len(vals) != 1:
+                    continue
+                color = int(vals[0])
+                if color == 0 or color == sep_color:
+                    continue
+                counts.setdefault(color, set()).add((r, c))
+
+        if not counts:
+            return None
+
+        items = sorted(((color, len(pos)) for color, pos in counts.items()), key=lambda t: (t[1], t[0]))
+        out = np.zeros((len(items), max(cnt for _, cnt in items)), dtype=x.dtype)
+        for r, (color, cnt) in enumerate(items):
+            out[r, :cnt] = color
+        return out
+
+    # -------------------------
+    # single marker-color around a 1-frame -> small staircase summary
+    # -------------------------
+    def _marker_frame_to_small_staircase(self, x):
+        marker_colors = [int(c) for c in np.unique(x) if c not in (0, 1)]
+        if len(marker_colors) != 1:
+            return None
+
+        ones = np.argwhere(x == 1)
+        if len(ones) == 0:
+            return None
+
+        r0, r1 = int(ones[:, 0].min()), int(ones[:, 0].max())
+        c0, c1 = int(ones[:, 1].min()), int(ones[:, 1].max())
+        h = r1 - r0 + 1
+        w = c1 - c0 + 1
+
+        color = marker_colors[0]
+        out = np.zeros((3, 3), dtype=x.dtype)
+        out[0, :] = color
+
+        if min(h, w) <= 4:
+            return out
+        if h == w:
+            out[1, :2] = color
+            return out
+
+        out[1, 0] = color
+        return out
+
+    def _marker_signature(self, x):
+        ones = np.argwhere(x == 1)
+        if len(ones) == 0:
+            return None
+
+        marker_colors = [int(c) for c in np.unique(x) if c not in (0, 1)]
+        if len(marker_colors) != 1:
+            return None
+
+        color = marker_colors[0]
+        marks = np.argwhere(x == color)
+        if len(marks) == 0:
+            return None
+
+        r0, r1 = ones[:, 0].min(), ones[:, 0].max()
+        c0, c1 = ones[:, 1].min(), ones[:, 1].max()
+        bins = {}
+        for r, c in marks:
+            vd = int(min(abs(r - r0), abs(r - r1)))
+            hd = int(min(abs(c - c0), abs(c - c1)))
+            bins[(vd, hd)] = bins.get((vd, hd), 0) + 1
+
+        return color, tuple(sorted(bins.items()))
+
+    def _make_marker_shape_by_nearest_fold_signature_rule(self, train_pairs, problem_name=""):
+        prototypes = []
+
+        for idx, (inp, out) in enumerate(train_pairs):
+            sig = self._marker_signature(inp)
+            if sig is None:
+                return None
+            color, bins = sig
+
+            out_colors = [int(c) for c in np.unique(out) if c != 0]
+            if len(out_colors) != 1 or out_colors[0] != color:
+                return None
+
+            coords = np.argwhere(out == color)
+            if len(coords) == 0:
+                return None
+
+            pattern = np.zeros_like(out)
+            pattern[out == color] = 1
+            prototypes.append((bins, pattern))
+
+        if not prototypes:
+            return None
+
+        def dist(a_bins, b_bins):
+            a = dict(a_bins)
+            b = dict(b_bins)
+            keys = set(a) | set(b)
+            return sum(abs(a.get(k, 0) - b.get(k, 0)) for k in keys)
+
+        def rule(x):
+            sig = self._marker_signature(x)
+            if sig is None:
+                return None
+            color, bins = sig
+
+            best_pattern = None
+            best_score = None
+            for proto_bins, proto_pattern in prototypes:
+                score = dist(bins, proto_bins)
+                if best_score is None or score < best_score:
+                    best_score = score
+                    best_pattern = proto_pattern
+
+            if best_pattern is None:
+                return None
+
+            out = np.zeros_like(best_pattern, dtype=x.dtype)
+            out[best_pattern == 1] = color
+            return out
+
+        return rule
 
     # -------------------------
     # clue-pair recolor + crop rule

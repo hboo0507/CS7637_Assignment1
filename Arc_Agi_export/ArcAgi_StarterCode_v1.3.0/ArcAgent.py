@@ -23,6 +23,13 @@ class ArcAgent:
             print(f"\n===== Problem: {problem_name} =====")
 
         simple_rules = [
+            ("draw_recursive_three_spiral_on_empty_square", self._draw_recursive_three_spiral_on_empty_square),
+            ("hollow_solid_rectangles", self._hollow_solid_rectangles),
+            ("project_border_color_hits_to_inner_edges", self._project_border_color_hits_to_inner_edges),
+            ("five_markers_to_centered_three_by_three_blocks", self._five_markers_to_centered_three_by_three_blocks),
+            ("draw_x_through_single_colored_seed", self._draw_x_through_single_colored_seed),
+            ("replace_six_with_two_keep_seven", self._replace_six_with_two_keep_seven),
+            ("keep_five_mask_recolored_to_other", self._keep_five_mask_recolored_to_other),
             ("reflect_fives_outside_two_frame", self._reflect_fives_outside_two_frame),
             ("fold_across_five_separator_row", self._fold_across_five_separator_row),
             ("decorate_four_rectangle_corners_and_connect", self._decorate_four_rectangle_corners_and_connect),
@@ -986,6 +993,167 @@ class ArcAgent:
         for col_idx, (color, cnt) in enumerate(counts):
             out[:cnt, col_idx] = color
 
+        return out
+
+    # -------------------------
+    # empty square -> recursive 3 spiral
+    # -------------------------
+    def _draw_recursive_three_spiral_on_empty_square(self, x):
+        h, w = x.shape
+        if h != w or h < 2 or np.any(x != 0):
+            return None
+
+        out = np.full_like(x, 3)
+
+        def can_step(nr, nc, cr, cc):
+            if not (0 <= nr < h and 0 <= nc < w):
+                return False
+            if out[nr, nc] == 0:
+                return False
+            if nr in (0, h - 1) or nc in (0, w - 1):
+                return False
+            for ar, ac in self._neighbors4(nr, nc, h, w):
+                if (ar, ac) != (cr, cc) and out[ar, ac] == 0:
+                    return False
+            return True
+
+        r, c = 1, 0
+        out[r, c] = 0
+        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+        dir_idx = 0
+        while True:
+            dr, dc = directions[dir_idx]
+            nr, nc = r + dr, c + dc
+            if can_step(nr, nc, r, c):
+                r, c = nr, nc
+                out[r, c] = 0
+                continue
+            dir_idx = (dir_idx + 1) % 4
+            dr, dc = directions[dir_idx]
+            nr, nc = r + dr, c + dc
+            if can_step(nr, nc, r, c):
+                r, c = nr, nc
+                out[r, c] = 0
+                continue
+            break
+        return out
+
+    # -------------------------
+    # convert filled rectangular components into hollow rectangular frames
+    # -------------------------
+    def _hollow_solid_rectangles(self, x):
+        out = x.copy()
+        changed = False
+        for color in [int(c) for c in np.unique(x) if c != 0]:
+            comps = self._connected_components_of_color(x, color)
+            for comp in comps:
+                rows = [r for r, _ in comp]
+                cols = [c for _, c in comp]
+                r0, r1 = min(rows), max(rows)
+                c0, c1 = min(cols), max(cols)
+                if (r1 - r0 + 1) * (c1 - c0 + 1) != len(comp):
+                    return None
+                if r1 - r0 < 1 or c1 - c0 < 1:
+                    continue
+                out[r0:r1 + 1, c0:c1 + 1] = 0
+                out[r0, c0:c1 + 1] = color
+                out[r1, c0:c1 + 1] = color
+                out[r0:r1 + 1, c0] = color
+                out[r0:r1 + 1, c1] = color
+                changed = True
+        return out if changed else None
+
+    # -------------------------
+    # project interior cells that match a border's color to that border's inner edge
+    # -------------------------
+    def _project_border_color_hits_to_inner_edges(self, x):
+        h, w = x.shape
+        if h < 3 or w < 3:
+            return None
+
+        top_color = int(x[0, 1])
+        bottom_color = int(x[h - 1, 1])
+        left_color = int(x[1, 0])
+        right_color = int(x[1, w - 1])
+        if 0 in (top_color, bottom_color, left_color, right_color):
+            return None
+
+        out = np.zeros_like(x)
+        out[0, :] = x[0, :]
+        out[h - 1, :] = x[h - 1, :]
+        out[:, 0] = x[:, 0]
+        out[:, w - 1] = x[:, w - 1]
+
+        for r in range(1, h - 1):
+            for c in range(1, w - 1):
+                color = int(x[r, c])
+                if color == top_color:
+                    out[1, c] = color
+                elif color == bottom_color:
+                    out[h - 2, c] = color
+                elif color == left_color:
+                    out[r, 1] = color
+                elif color == right_color:
+                    out[r, w - 2] = color
+
+        return out
+
+    # -------------------------
+    # each 5 marker becomes a centered 3x3 block of 1s
+    # -------------------------
+    def _five_markers_to_centered_three_by_three_blocks(self, x):
+        colors = {int(c) for c in np.unique(x)}
+        if any(c not in {0, 5} for c in colors) or 5 not in colors:
+            return None
+
+        out = np.zeros_like(x)
+        for r, c in np.argwhere(x == 5):
+            r0, r1 = max(0, r - 1), min(x.shape[0], r + 2)
+            c0, c1 = max(0, c - 1), min(x.shape[1], c + 2)
+            out[r0:r1, c0:c1] = 1
+        return out
+
+    # -------------------------
+    # draw both diagonals through the single nonzero seed
+    # -------------------------
+    def _draw_x_through_single_colored_seed(self, x):
+        pts = np.argwhere(x != 0)
+        if len(pts) != 1:
+            return None
+        r, c = map(int, pts[0])
+        color = int(x[r, c])
+        out = np.zeros_like(x)
+        h, w = x.shape
+        for rr in range(h):
+            cc = c + (rr - r)
+            if 0 <= cc < w:
+                out[rr, cc] = color
+            cc = c - (rr - r)
+            if 0 <= cc < w:
+                out[rr, cc] = color
+        return out
+
+    # -------------------------
+    # remap 6 to 2 while keeping 7 unchanged
+    # -------------------------
+    def _replace_six_with_two_keep_seven(self, x):
+        colors = {int(c) for c in np.unique(x)}
+        if any(c not in {6, 7} for c in colors) or 6 not in colors or 7 not in colors:
+            return None
+        out = x.copy()
+        out[out == 6] = 2
+        return out
+
+    # -------------------------
+    # keep only the 5 mask, recolored to the other nonzero color
+    # -------------------------
+    def _keep_five_mask_recolored_to_other(self, x):
+        colors = [int(c) for c in np.unique(x) if c != 0]
+        if len(colors) != 2 or 5 not in colors:
+            return None
+        keep_color = next(c for c in colors if c != 5)
+        out = np.zeros_like(x)
+        out[x == 5] = keep_color
         return out
 
     # -------------------------

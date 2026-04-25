@@ -63,8 +63,8 @@ if __name__ == "__main__":
     # Default to Milestone C, but allow overriding with:
     #   python ArcDriver.py C
     # or:
-    #   ARC_MILESTONE=C python ArcDriver.py
-    milestone_name = 'C'
+    #   ARC_MILESTONE=D python ArcDriver.py
+    milestone_name = 'D'
     if len(sys.argv) > 1:
         milestone_name = sys.argv[1].strip().upper()
     else:

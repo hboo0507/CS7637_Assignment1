@@ -60,11 +60,11 @@ def load_arc_problems(path: str, problem_data: list[str]) -> list[ArcProblem]:
 
 
 if __name__ == "__main__":
-    # Default to Milestone B, but allow overriding with:
+    # Default to Milestone C, but allow overriding with:
     #   python ArcDriver.py C
     # or:
     #   ARC_MILESTONE=C python ArcDriver.py
-    milestone_name = 'B'
+    milestone_name = 'C'
     if len(sys.argv) > 1:
         milestone_name = sys.argv[1].strip().upper()
     else:

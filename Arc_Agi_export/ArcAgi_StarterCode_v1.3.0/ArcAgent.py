@@ -23,6 +23,15 @@ class ArcAgent:
             print(f"\n===== Problem: {problem_name} =====")
 
         simple_rules = [
+            ("fold_across_five_separator_row", self._fold_across_five_separator_row),
+            ("decorate_four_rectangle_corners_and_connect", self._decorate_four_rectangle_corners_and_connect),
+            ("expand_leading_run_to_half_width_staircase", self._expand_leading_run_to_half_width_staircase),
+            ("fill_zero_regions_outer_three_inner_two", self._fill_zero_regions_outer_three_inner_two),
+            ("fill_rows_when_endpoints_match", self._fill_rows_when_endpoints_match),
+            ("recolor_holey_one_components_to_eight", self._recolor_holey_one_components_to_eight),
+            ("overlay_three_equal_panels_left_to_right_priority", self._overlay_three_equal_panels_left_to_right_priority),
+            ("extend_single_marker_from_wedge_apex", self._extend_single_marker_from_wedge_apex),
+            ("move_three_one_step_toward_four", self._move_three_one_step_toward_four),
             ("trace_threes_between_single_one_and_two", self._trace_threes_between_single_one_and_two),
             ("surround_holey_ones_with_twos_and_fill_inner_edge_with_threes", self._surround_holey_ones_with_twos_and_fill_inner_edge_with_threes),
             ("count_panel_blocks_to_staircase", self._count_panel_blocks_to_staircase),
@@ -976,6 +985,305 @@ class ArcAgent:
         for col_idx, (color, cnt) in enumerate(counts):
             out[:cnt, col_idx] = color
 
+        return out
+
+    # -------------------------
+    # remove a full row of 5s and overlay the top and bottom halves
+    # -------------------------
+    def _fold_across_five_separator_row(self, x):
+        h, w = x.shape
+        five_rows = [r for r in range(h) if np.all(x[r, :] == 5)]
+        if len(five_rows) != 1:
+            return None
+
+        sep = five_rows[0]
+        top = x[:sep, :]
+        bottom = x[sep + 1:, :]
+        if top.shape != bottom.shape or top.shape[0] == 0:
+            return None
+
+        out = top.copy()
+        mask = bottom != 0
+        out[mask] = bottom[mask]
+        return out
+
+    # -------------------------
+    # four corner markers define a rectangle:
+    # expand each into a 3x3 block of the other color and connect the centers with 5s
+    # -------------------------
+    def _decorate_four_rectangle_corners_and_connect(self, x):
+        pts = np.argwhere(x != 0)
+        if len(pts) != 4:
+            return None
+
+        rows = sorted({int(r) for r, _ in pts})
+        cols = sorted({int(c) for _, c in pts})
+        if len(rows) != 2 or len(cols) != 2:
+            return None
+
+        r0, r1 = rows
+        c0, c1 = cols
+        corners = [(r0, c0), (r0, c1), (r1, c0), (r1, c1)]
+        if any(x[r, c] == 0 for r, c in corners):
+            return None
+
+        colors = sorted({int(x[r, c]) for r, c in corners})
+        if len(colors) != 2:
+            return None
+
+        a, b = colors
+        if int(x[r0, c0]) != int(x[r1, c1]) or int(x[r0, c1]) != int(x[r1, c0]):
+            return None
+        if {int(x[r0, c0]), int(x[r0, c1])} != {a, b}:
+            return None
+
+        h, w = x.shape
+        if r0 - 1 < 0 or r1 + 1 >= h or c0 - 1 < 0 or c1 + 1 >= w:
+            return None
+
+        out = np.zeros_like(x)
+        for r, c in corners:
+            center_color = int(x[r, c])
+            surround_color = b if center_color == a else a
+            out[r - 1:r + 2, c - 1:c + 2] = surround_color
+            out[r, c] = center_color
+
+        for c in range(c0 + 2, c1 - 1):
+            if min(c - (c0 + 2), (c1 - 2) - c) % 2 == 0:
+                out[r0, c] = 5
+                out[r1, c] = 5
+
+        for r in range(r0 + 2, r1 - 1):
+            if min(r - (r0 + 2), (r1 - 2) - r) % 2 == 0:
+                out[r, c0] = 5
+                out[r, c1] = 5
+        return out
+
+    # -------------------------
+    # grow the leading nonzero run one step per row for half the width
+    # -------------------------
+    def _expand_leading_run_to_half_width_staircase(self, x):
+        if x.shape[0] != 1 or x.shape[1] % 2 != 0:
+            return None
+
+        row = x[0]
+        nz = np.flatnonzero(row != 0)
+        if len(nz) == 0:
+            return None
+
+        run_len = len(nz)
+        if not np.array_equal(nz, np.arange(run_len)):
+            return None
+
+        color = int(row[0])
+        if np.any(row[:run_len] != color) or np.any(row[run_len:] != 0):
+            return None
+
+        h = x.shape[1] // 2
+        out = np.zeros((h, x.shape[1]), dtype=x.dtype)
+        for r in range(h):
+            out[r, :run_len + r] = color
+        return out
+
+    # -------------------------
+    # fill zero background with 3, but enclosed zero regions with 2
+    # -------------------------
+    def _fill_zero_regions_outer_three_inner_two(self, x):
+        if np.any((x != 0) & (x == 2)):
+            return None
+
+        h, w = x.shape
+        zero_seen = np.zeros((h, w), dtype=bool)
+        out = x.copy()
+        found_zero = False
+
+        for r in range(h):
+            for c in range(w):
+                if x[r, c] != 0 or zero_seen[r, c]:
+                    continue
+                found_zero = True
+                stack = [(r, c)]
+                zero_seen[r, c] = True
+                comp = []
+                touches_border = False
+                while stack:
+                    rr, cc = stack.pop()
+                    comp.append((rr, cc))
+                    if rr in (0, h - 1) or cc in (0, w - 1):
+                        touches_border = True
+                    for nr, nc in self._neighbors4(rr, cc, h, w):
+                        if x[nr, nc] == 0 and not zero_seen[nr, nc]:
+                            zero_seen[nr, nc] = True
+                            stack.append((nr, nc))
+                fill = 3 if touches_border else 2
+                for rr, cc in comp:
+                    out[rr, cc] = fill
+
+        return out if found_zero else None
+
+    # -------------------------
+    # fill a whole row when its two endpoint markers match
+    # -------------------------
+    def _fill_rows_when_endpoints_match(self, x):
+        h, w = x.shape
+        if w < 2:
+            return None
+        out = x.copy()
+        for r in range(h):
+            left = int(x[r, 0])
+            right = int(x[r, w - 1])
+            if left != 0 and left == right and np.any(x[r, 1:w - 1] == 0):
+                out[r, :] = left
+        return out
+
+    # -------------------------
+    # recolor only 1-components that enclose at least one zero hole to 8
+    # -------------------------
+    def _recolor_holey_one_components_to_eight(self, x):
+        comps = self._connected_components_of_color(x, 1)
+        if not comps:
+            return None
+
+        h, w = x.shape
+        out = x.copy()
+        changed = False
+        values, counts = np.unique(x, return_counts=True)
+        bg_color = int(values[np.argmax(counts)])
+
+        for comp in comps:
+            comp_set = set(comp)
+            rows = [r for r, _ in comp]
+            cols = [c for _, c in comp]
+            r0, r1 = min(rows), max(rows)
+            c0, c1 = min(cols), max(cols)
+
+            reachable = np.zeros((h, w), dtype=bool)
+            stack = []
+            for r in range(r0, r1 + 1):
+                for c in range(c0, c1 + 1):
+                    if r in (r0, r1) or c in (c0, c1):
+                        if x[r, c] == bg_color and (r, c) not in comp_set and not reachable[r, c]:
+                            reachable[r, c] = True
+                            stack.append((r, c))
+
+            while stack:
+                r, c = stack.pop()
+                for nr, nc in self._neighbors4(r, c, h, w):
+                    if nr < r0 or nr > r1 or nc < c0 or nc > c1:
+                        continue
+                    if x[nr, nc] != bg_color or (nr, nc) in comp_set or reachable[nr, nc]:
+                        continue
+                    reachable[nr, nc] = True
+                    stack.append((nr, nc))
+
+            has_hole = False
+            for r in range(r0, r1 + 1):
+                for c in range(c0, c1 + 1):
+                    if x[r, c] == bg_color and (r, c) not in comp_set and not reachable[r, c]:
+                        has_hole = True
+                        break
+                if has_hole:
+                    break
+
+            if has_hole:
+                for r, c in comp:
+                    out[r, c] = 8
+                    changed = True
+
+        return out if changed else None
+
+    # -------------------------
+    # overlay three equal-width panels separated by full columns
+    # using left-to-right nonzero priority
+    # -------------------------
+    def _overlay_three_equal_panels_left_to_right_priority(self, x):
+        h, w = x.shape
+        if h != 4 or w != 14:
+            return None
+
+        if not np.all(x[:, 4] == 2) or not np.all(x[:, 9] == 2):
+            return None
+
+        c1, c2 = 4, 9
+        left = x[:, :c1]
+        middle = x[:, c1 + 1:c2]
+        right = x[:, c2 + 1:]
+        if left.shape != middle.shape or middle.shape != right.shape:
+            return None
+
+        out = left.copy()
+        mask = out == 0
+        out[mask & (middle != 0)] = middle[mask & (middle != 0)]
+        mask = out == 0
+        out[mask & (right != 0)] = right[mask & (right != 0)]
+        return out
+
+    # -------------------------
+    # extend the singleton marker color away from the apex side
+    # of the surrounding wedge component
+    # -------------------------
+    def _extend_single_marker_from_wedge_apex(self, x):
+        colors = [int(c) for c in np.unique(x) if c != 0]
+        if len(colors) != 2:
+            return None
+
+        counts = {c: int(np.sum(x == c)) for c in colors}
+        marker_color = next((c for c in colors if counts[c] == 1), None)
+        if marker_color is None:
+            return None
+        bulk_color = next(c for c in colors if c != marker_color)
+
+        r, c = map(int, np.argwhere(x == marker_color)[0])
+        bulk = np.argwhere(x == bulk_color)
+        if bulk.size == 0:
+            return None
+
+        r0, c0 = bulk.min(axis=0)
+        r1, c1 = bulk.max(axis=0)
+        if r == r0:
+            dr, dc = 1, 0
+        elif r == r1:
+            dr, dc = -1, 0
+        elif c == c0:
+            dr, dc = 0, 1
+        elif c == c1:
+            dr, dc = 0, -1
+        else:
+            return None
+
+        out = x.copy()
+        cr, cc = r, c
+        # Skip over the wedge itself, then extend only through the empty region.
+        while 0 <= cr < x.shape[0] and 0 <= cc < x.shape[1] and out[cr, cc] != 0:
+            cr += dr
+            cc += dc
+        while 0 <= cr < x.shape[0] and 0 <= cc < x.shape[1]:
+            out[cr, cc] = marker_color
+            cr += dr
+            cc += dc
+        return out
+
+    # -------------------------
+    # move the single 3 one king-step toward the single 4
+    # -------------------------
+    def _move_three_one_step_toward_four(self, x):
+        threes = np.argwhere(x == 3)
+        fours = np.argwhere(x == 4)
+        others = [int(c) for c in np.unique(x) if c not in (0, 3, 4)]
+        if len(threes) != 1 or len(fours) != 1 or others:
+            return None
+
+        r3, c3 = map(int, threes[0])
+        r4, c4 = map(int, fours[0])
+        dr = 0 if r4 == r3 else (1 if r4 > r3 else -1)
+        dc = 0 if c4 == c3 else (1 if c4 > c3 else -1)
+        nr, nc = r3 + dr, c3 + dc
+        if not (0 <= nr < x.shape[0] and 0 <= nc < x.shape[1]):
+            return None
+
+        out = x.copy()
+        out[r3, c3] = 0
+        out[nr, nc] = 3
         return out
 
     # -------------------------

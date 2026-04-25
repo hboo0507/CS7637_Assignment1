@@ -23,6 +23,9 @@ class ArcAgent:
             print(f"\n===== Problem: {problem_name} =====")
 
         simple_rules = [
+            ("recolor_cropped_shape_from_clue_pairs", self._recolor_cropped_shape_from_clue_pairs),
+            ("expand_single_two_to_v_with_inner_diagonals", self._expand_single_two_to_v_with_inner_diagonals),
+            ("draw_line_between_twos_with_one_to_three", self._draw_line_between_twos_with_one_to_three),
             ("complete_missing_panel_by_separator_mirroring", self._complete_missing_panel_by_separator_mirroring),
             ("mirror_propagate_across_full_separators", self._mirror_propagate_across_full_separators),
             ("xor_top_bottom_masks_to_six", self._xor_top_bottom_masks_to_six),
@@ -953,6 +956,187 @@ class ArcAgent:
 
         for col_idx, (color, cnt) in enumerate(counts):
             out[:cnt, col_idx] = color
+
+        return out
+
+    # -------------------------
+    # clue-pair recolor + crop rule
+    # -------------------------
+    def _largest_nonzero_component_bbox(self, x):
+        h, w = x.shape
+        visited = np.zeros((h, w), dtype=bool)
+        best = None
+
+        for r in range(h):
+            for c in range(w):
+                if visited[r, c] or x[r, c] == 0:
+                    continue
+
+                stack = [(r, c)]
+                visited[r, c] = True
+                comp = []
+
+                while stack:
+                    cr, cc = stack.pop()
+                    comp.append((cr, cc))
+                    for nr, nc in self._neighbors4(cr, cc, h, w):
+                        if not visited[nr, nc] and x[nr, nc] != 0:
+                            visited[nr, nc] = True
+                            stack.append((nr, nc))
+
+                if best is None or len(comp) > len(best):
+                    best = comp
+
+        if not best:
+            return None
+
+        rows = [r for r, _ in best]
+        cols = [c for _, c in best]
+        return min(rows), max(rows), min(cols), max(cols)
+
+    def _all_nonzero_connected_components(self, x):
+        h, w = x.shape
+        visited = np.zeros((h, w), dtype=bool)
+        components = []
+
+        for r in range(h):
+            for c in range(w):
+                if visited[r, c] or x[r, c] == 0:
+                    continue
+
+                stack = [(r, c)]
+                visited[r, c] = True
+                comp = []
+
+                while stack:
+                    cr, cc = stack.pop()
+                    comp.append((cr, cc))
+                    for nr, nc in self._neighbors4(cr, cc, h, w):
+                        if not visited[nr, nc] and x[nr, nc] != 0:
+                            visited[nr, nc] = True
+                            stack.append((nr, nc))
+
+                components.append(comp)
+
+        return components
+
+    def _recolor_cropped_shape_from_clue_pairs(self, x):
+        bbox = self._largest_nonzero_component_bbox(x)
+        if bbox is None:
+            return None
+
+        r0, r1, c0, c1 = bbox
+        cropped = x[r0:r1 + 1, c0:c1 + 1].copy()
+
+        mapping = {}
+        for comp in self._all_nonzero_connected_components(x):
+            if len(comp) != 2:
+                continue
+
+            if all(r0 <= r <= r1 and c0 <= c <= c1 for r, c in comp):
+                continue
+
+            cells = sorted(comp, key=lambda rc: (rc[0], rc[1]))
+            (ra, ca), (rb, cb) = cells
+
+            # Training cases use 2-cell horizontal clues: left color is target,
+            # right color is source to be recolored inside the large object.
+            if ra != rb or abs(ca - cb) != 1:
+                continue
+
+            left, right = sorted(cells, key=lambda rc: rc[1])
+            target = int(x[left[0], left[1]])
+            source = int(x[right[0], right[1]])
+
+            if target == source:
+                continue
+            mapping[source] = target
+
+        if not mapping:
+            return None
+
+        changed = False
+        for source, target in mapping.items():
+            mask = cropped == source
+            if np.any(mask):
+                cropped[mask] = target
+                changed = True
+
+        return cropped if changed else None
+
+    # -------------------------
+    # single 2 -> V plus inner diagonals
+    # -------------------------
+    def _expand_single_two_to_v_with_inner_diagonals(self, x):
+        if x.ndim != 2 or x.shape[0] != 1:
+            return None
+
+        coords = np.argwhere(x == 2)
+        nonzero = np.argwhere(x != 0)
+        if len(coords) != 1 or len(nonzero) != 1:
+            return None
+
+        _, pivot = coords[0]
+        n = x.shape[1]
+        out = np.zeros((n, n), dtype=x.dtype)
+
+        for r in range(n):
+            left = pivot - r
+            right = pivot + r
+            if 0 <= left < n:
+                out[r, left] = 2
+            if 0 <= right < n:
+                out[r, right] = 2
+
+        m = 0
+        while True:
+            base_c = pivot - 1 - 2 * m
+            start_c = max(0, base_c)
+            start_r = 3 + 2 * m + max(0, -base_c)
+
+            if start_r >= n:
+                break
+
+            r, c = start_r, start_c
+            while r < n and c < n:
+                out[r, c] = 1
+                r += 1
+                c += 1
+
+            m += 1
+
+        return out
+
+    # -------------------------
+    # draw between two 2s, turning crossed 1s into 3s
+    # -------------------------
+    def _draw_line_between_twos_with_one_to_three(self, x):
+        coords = [tuple(int(v) for v in rc) for rc in np.argwhere(x == 2)]
+        if len(coords) != 2:
+            return None
+
+        (r1, c1), (r2, c2) = coords
+        dr = r2 - r1
+        dc = c2 - c1
+
+        if dr == 0:
+            step_r, step_c = 0, 1 if dc > 0 else -1
+            steps = abs(dc)
+        elif dc == 0:
+            step_r, step_c = 1 if dr > 0 else -1, 0
+            steps = abs(dr)
+        elif abs(dr) == abs(dc):
+            step_r = 1 if dr > 0 else -1
+            step_c = 1 if dc > 0 else -1
+            steps = abs(dr)
+        else:
+            return None
+
+        out = x.copy()
+        for k in range(steps + 1):
+            r = r1 + step_r * k
+            c = c1 + step_c * k
+            out[r, c] = 3 if x[r, c] == 1 else 2
 
         return out
 

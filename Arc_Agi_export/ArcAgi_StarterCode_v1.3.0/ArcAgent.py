@@ -23,6 +23,7 @@ class ArcAgent:
             print(f"\n===== Problem: {problem_name} =====")
 
         simple_rules = [
+            ("mirror_bottom_half_to_top", self._mirror_bottom_half_to_top),
             ("draw_recursive_three_spiral_on_empty_square", self._draw_recursive_three_spiral_on_empty_square),
             ("hollow_solid_rectangles", self._hollow_solid_rectangles),
             ("project_border_color_hits_to_inner_edges", self._project_border_color_hits_to_inner_edges),
@@ -994,6 +995,20 @@ class ArcAgent:
             out[:cnt, col_idx] = color
 
         return out
+
+    # -------------------------
+    # mirror the bottom half upward when the top half is empty
+    # -------------------------
+    def _mirror_bottom_half_to_top(self, x):
+        h, w = x.shape
+        if h % 2 != 0:
+            return None
+        mid = h // 2
+        top = x[:mid, :]
+        bottom = x[mid:, :]
+        if np.any(top != 0) or not np.any(bottom != 0):
+            return None
+        return np.vstack([np.flipud(bottom), bottom])
 
     # -------------------------
     # empty square -> recursive 3 spiral

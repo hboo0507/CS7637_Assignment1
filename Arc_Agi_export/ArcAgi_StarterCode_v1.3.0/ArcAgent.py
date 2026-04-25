@@ -23,6 +23,7 @@ class ArcAgent:
             print(f"\n===== Problem: {problem_name} =====")
 
         simple_rules = [
+            ("reflect_fives_outside_two_frame", self._reflect_fives_outside_two_frame),
             ("fold_across_five_separator_row", self._fold_across_five_separator_row),
             ("decorate_four_rectangle_corners_and_connect", self._decorate_four_rectangle_corners_and_connect),
             ("expand_leading_run_to_half_width_staircase", self._expand_leading_run_to_half_width_staircase),
@@ -984,6 +985,46 @@ class ArcAgent:
 
         for col_idx, (color, cnt) in enumerate(counts):
             out[:cnt, col_idx] = color
+
+        return out
+
+    # -------------------------
+    # move 5-cells outside a 2-frame by reflecting across the frame's long-axis sides
+    # -------------------------
+    def _reflect_fives_outside_two_frame(self, x):
+        colors = {int(c) for c in np.unique(x)}
+        if not {2, 5}.issubset(colors) or any(c not in {0, 2, 5} for c in colors):
+            return None
+
+        twos = np.argwhere(x == 2)
+        fives = np.argwhere(x == 5)
+        if len(twos) == 0 or len(fives) == 0:
+            return None
+
+        r0, c0 = twos.min(axis=0)
+        r1, c1 = twos.max(axis=0)
+        height = int(r1 - r0 + 1)
+        width = int(c1 - c0 + 1)
+
+        out = x.copy()
+        out[out == 5] = 0
+
+        if height > width:
+            mid = (r0 + r1) / 2.0
+            for r, c in fives:
+                rr = int(r0 - (r - r0)) if r < mid else int(r1 + (r1 - r))
+                cc = int(c)
+                if not (0 <= rr < x.shape[0]):
+                    return None
+                out[rr, cc] = 5
+        else:
+            mid = (c0 + c1) / 2.0
+            for r, c in fives:
+                rr = int(r)
+                cc = int(c0 - (c - c0)) if c < mid else int(c1 + (c1 - c))
+                if not (0 <= cc < x.shape[1]):
+                    return None
+                out[rr, cc] = 5
 
         return out
 

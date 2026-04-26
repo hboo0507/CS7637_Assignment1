@@ -140,6 +140,21 @@ class ArcAgent:
                 if self._should_debug(problem_name):
                     print("[learned] marker_shape_by_nearest_fold_signature_rule crashed:", e)
 
+        holey_role_rule = self._make_holey_component_role_rule(train_pairs, problem_name)
+        if self._should_debug(problem_name):
+            print("[learned] holey_component_role_rule is None?", holey_role_rule is None)
+        if holey_role_rule is not None:
+            try:
+                pred = holey_role_rule(test_input)
+                if self._should_debug(problem_name):
+                    print("[learned] holey_component_role_rule pred is None?", pred is None)
+                    if pred is not None:
+                        print(pred.tolist())
+                self._append_if_new(predictions, pred)
+            except Exception as e:
+                if self._should_debug(problem_name):
+                    print("[learned] holey_component_role_rule crashed:", e)
+
         for mode in ["and", "or", "xor", "nor"]:
             rule = self._make_panel_rule(train_pairs, mode, problem_name)
             if self._should_debug(problem_name):
@@ -1960,6 +1975,65 @@ class ArcAgent:
 
         return out
 
+    def _surround_holey_components_with_role_colors(self, x, bg_color, shape_color, outer_color, inner_color):
+        h, w = x.shape
+        out = x.copy()
+        changed = False
+
+        comps = self._connected_components_of_color(x, shape_color)
+        if not comps:
+            return None
+
+        for comp in comps:
+            comp_set = set(comp)
+            rows = [r for r, _ in comp]
+            cols = [c for _, c in comp]
+            r0, r1 = min(rows), max(rows)
+            c0, c1 = min(cols), max(cols)
+
+            reachable = np.zeros((h, w), dtype=bool)
+            stack = []
+            for r in range(r0, r1 + 1):
+                for c in range(c0, c1 + 1):
+                    if r in (r0, r1) or c in (c0, c1):
+                        if (r, c) not in comp_set and x[r, c] == bg_color and not reachable[r, c]:
+                            reachable[r, c] = True
+                            stack.append((r, c))
+
+            while stack:
+                r, c = stack.pop()
+                for nr, nc in self._neighbors4(r, c, h, w):
+                    if nr < r0 or nr > r1 or nc < c0 or nc > c1:
+                        continue
+                    if (nr, nc) in comp_set or x[nr, nc] != bg_color or reachable[nr, nc]:
+                        continue
+                    reachable[nr, nc] = True
+                    stack.append((nr, nc))
+
+            holes = []
+            for r in range(r0, r1 + 1):
+                for c in range(c0, c1 + 1):
+                    if x[r, c] == bg_color and (r, c) not in comp_set and not reachable[r, c]:
+                        holes.append((r, c))
+
+            if not holes:
+                continue
+
+            for r, c in comp:
+                for nr in range(r - 1, r + 2):
+                    for nc in range(c - 1, c + 2):
+                        if 0 <= nr < h and 0 <= nc < w and x[nr, nc] == bg_color and (nr, nc) not in comp_set:
+                            if out[nr, nc] == bg_color:
+                                out[nr, nc] = outer_color
+                                changed = True
+
+            for r, c in holes:
+                if any((nr, nc) in comp_set for nr, nc in self._neighbors4(r, c, h, w)):
+                    out[r, c] = inner_color
+                    changed = True
+
+        return out if changed else x.copy()
+
     # -------------------------
     # count monochrome 2x2 blocks in separator panels -> staircase
     # -------------------------
@@ -2089,6 +2163,59 @@ class ArcAgent:
             out[best_pattern == 1] = color
             return out
 
+        return rule
+
+    def _make_holey_component_role_rule(self, train_pairs, problem_name=""):
+        if not train_pairs:
+            return None
+
+        bg_color = None
+        shape_color = None
+        outer_color = None
+        inner_color = None
+
+        for inp, out in train_pairs:
+            inp_colors = [int(c) for c in np.unique(inp)]
+            out_colors = [int(c) for c in np.unique(out)]
+            current_bg = max(inp_colors, key=lambda c: int(np.sum(inp == c)))
+            non_bg_inp = [c for c in inp_colors if c != current_bg]
+            if len(non_bg_inp) != 1:
+                return None
+            current_shape = non_bg_inp[0]
+
+            added = [c for c in out_colors if c not in inp_colors]
+            if len(added) not in (0, 2):
+                return None
+
+            if bg_color is None:
+                bg_color = current_bg
+                shape_color = current_shape
+            elif (bg_color, shape_color) != (current_bg, current_shape):
+                return None
+
+            if len(added) == 2:
+                counts = sorted(((int(np.sum(out == c)), c) for c in added), reverse=True)
+                current_outer = counts[0][1]
+                current_inner = counts[1][1]
+                if outer_color is None:
+                    outer_color, inner_color = current_outer, current_inner
+                elif (outer_color, inner_color) != (current_outer, current_inner):
+                    return None
+
+        if bg_color is None or shape_color is None or outer_color is None or inner_color is None:
+            return None
+
+        def rule(x):
+            return self._surround_holey_components_with_role_colors(
+                x,
+                bg_color=bg_color,
+                shape_color=shape_color,
+                outer_color=outer_color,
+                inner_color=inner_color,
+            )
+
+        if not self._fits_all_training(train_pairs, rule, "holey_component_role_rule", problem_name):
+            return None
         return rule
 
     # -------------------------

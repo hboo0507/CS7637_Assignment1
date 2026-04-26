@@ -1015,43 +1015,32 @@ class ArcAgent:
     # -------------------------
     def _draw_recursive_three_spiral_on_empty_square(self, x):
         h, w = x.shape
-        if h != w or h < 2 or np.any(x != 0):
+        if h != w or h < 1 or np.any(x != 0):
             return None
 
-        out = np.full_like(x, 3)
+        base_patterns = {
+            1: np.array([[3]], dtype=x.dtype),
+            2: np.array([[3, 3], [3, 3]], dtype=x.dtype),
+            3: np.array([[3, 3, 3], [0, 0, 3], [3, 3, 3]], dtype=x.dtype),
+            4: np.array([[3, 3, 3, 3], [0, 0, 0, 3], [3, 3, 0, 3], [3, 3, 3, 3]], dtype=x.dtype),
+        }
 
-        def can_step(nr, nc, cr, cc):
-            if not (0 <= nr < h and 0 <= nc < w):
-                return False
-            if out[nr, nc] == 0:
-                return False
-            if nr in (0, h - 1) or nc in (0, w - 1):
-                return False
-            for ar, ac in self._neighbors4(nr, nc, h, w):
-                if (ar, ac) != (cr, cc) and out[ar, ac] == 0:
-                    return False
-            return True
+        def wrap(inner):
+            n = inner.shape[0] + 4
+            out = np.full((n, n), 3, dtype=x.dtype)
+            out[2:n - 2, 2:n - 2] = inner
+            out[1, :-1] = 0
+            out[1:-1, 1] = 0
+            out[1:-1, n - 2] = 0
+            out[n - 2, 1:-1] = 0
+            out[2, 1] = 3
+            return out
 
-        r, c = 1, 0
-        out[r, c] = 0
-        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
-        dir_idx = 0
-        while True:
-            dr, dc = directions[dir_idx]
-            nr, nc = r + dr, c + dc
-            if can_step(nr, nc, r, c):
-                r, c = nr, nc
-                out[r, c] = 0
-                continue
-            dir_idx = (dir_idx + 1) % 4
-            dr, dc = directions[dir_idx]
-            nr, nc = r + dr, c + dc
-            if can_step(nr, nc, r, c):
-                r, c = nr, nc
-                out[r, c] = 0
-                continue
-            break
-        return out
+        base_size = 4 if h % 4 == 0 else h % 4
+        out = base_patterns[base_size]
+        while out.shape[0] < h:
+            out = wrap(out)
+        return out if out.shape == x.shape else None
 
     # -------------------------
     # convert filled rectangular components into hollow rectangular frames
@@ -1079,7 +1068,7 @@ class ArcAgent:
         return out if changed else None
 
     # -------------------------
-    # project interior cells that match a border's color to that border's inner edge
+    # project interior cells that match a border's color to the nearest matching side
     # -------------------------
     def _project_border_color_hits_to_inner_edges(self, x):
         h, w = x.shape
@@ -1092,6 +1081,14 @@ class ArcAgent:
         right_color = int(x[1, w - 1])
         if 0 in (top_color, bottom_color, left_color, right_color):
             return None
+        if not np.all(x[0, 1:w - 1] == top_color):
+            return None
+        if not np.all(x[h - 1, 1:w - 1] == bottom_color):
+            return None
+        if not np.all(x[1:h - 1, 0] == left_color):
+            return None
+        if not np.all(x[1:h - 1, w - 1] == right_color):
+            return None
 
         out = np.zeros_like(x)
         out[0, :] = x[0, :]
@@ -1102,14 +1099,23 @@ class ArcAgent:
         for r in range(1, h - 1):
             for c in range(1, w - 1):
                 color = int(x[r, c])
+                candidates = []
                 if color == top_color:
-                    out[1, c] = color
-                elif color == bottom_color:
-                    out[h - 2, c] = color
-                elif color == left_color:
-                    out[r, 1] = color
-                elif color == right_color:
-                    out[r, w - 2] = color
+                    candidates.append((r - 1, 1, c))
+                if color == bottom_color:
+                    candidates.append((h - 2 - r, h - 2, c))
+                if color == left_color:
+                    candidates.append((c - 1, r, 1))
+                if color == right_color:
+                    candidates.append((w - 2 - c, r, w - 2))
+
+                if not candidates:
+                    continue
+
+                best_dist = min(dist for dist, _, _ in candidates)
+                for dist, rr, cc in candidates:
+                    if dist == best_dist:
+                        out[rr, cc] = color
 
         return out
 
@@ -1149,14 +1155,28 @@ class ArcAgent:
         return out
 
     # -------------------------
-    # remap 6 to 2 while keeping 7 unchanged
+    # with exactly two nonzero colors, remap the more fragmented one to 2
+    # and keep the other color unchanged
     # -------------------------
     def _replace_six_with_two_keep_seven(self, x):
-        colors = {int(c) for c in np.unique(x)}
-        if any(c not in {6, 7} for c in colors) or 6 not in colors or 7 not in colors:
+        colors = sorted(int(c) for c in np.unique(x) if c != 0)
+        if len(colors) != 2:
             return None
+
+        stats = []
+        for color in colors:
+            comps = self._connected_components_of_color(x, color)
+            largest = max((len(comp) for comp in comps), default=0)
+            total = int(np.sum(x == color))
+            stats.append((len(comps), -largest, -total, -color, color))
+
+        stats.sort(reverse=True)
+        src_color = stats[0][-1]
+        keep_color = colors[0] if colors[1] == src_color else colors[1]
+
         out = x.copy()
-        out[out == 6] = 2
+        out[out == src_color] = 2
+        out[out == keep_color] = keep_color
         return out
 
     # -------------------------
@@ -1172,7 +1192,7 @@ class ArcAgent:
         return out
 
     # -------------------------
-    # move 5-cells outside a 2-frame by reflecting across the frame's long-axis sides
+    # move 5-cells outside a 2-frame by reflecting across its longest continuous 2-sides
     # -------------------------
     def _reflect_fives_outside_two_frame(self, x):
         colors = {int(c) for c in np.unique(x)}
@@ -1184,30 +1204,51 @@ class ArcAgent:
         if len(twos) == 0 or len(fives) == 0:
             return None
 
-        r0, c0 = twos.min(axis=0)
-        r1, c1 = twos.max(axis=0)
-        height = int(r1 - r0 + 1)
-        width = int(c1 - c0 + 1)
-
         out = x.copy()
         out[out == 5] = 0
 
-        if height > width:
-            mid = (r0 + r1) / 2.0
+        def longest_run(values):
+            best = 0
+            run = 0
+            for value in values:
+                run = run + 1 if value == 2 else 0
+                best = max(best, run)
+            return best
+
+        row_runs = {r: longest_run(x[r, :]) for r in range(x.shape[0])}
+        col_runs = {c: longest_run(x[:, c]) for c in range(x.shape[1])}
+        best_h = max(row_runs.values(), default=0)
+        best_v = max(col_runs.values(), default=0)
+
+        if best_h <= 1 and best_v <= 1:
+            return None
+
+        if best_h > best_v:
+            rows = [r for r, run in row_runs.items() if run == best_h]
+            top_row, bottom_row = min(rows), max(rows)
             for r, c in fives:
-                rr = int(r0 - (r - r0)) if r < mid else int(r1 + (r1 - r))
-                cc = int(c)
-                if not (0 <= rr < x.shape[0]):
-                    return None
-                out[rr, cc] = 5
+                distances = [(abs(r - top_row), top_row), (abs(r - bottom_row), bottom_row)]
+                best_dist = min(dist for dist, _ in distances)
+                for dist, side_row in distances:
+                    if dist != best_dist:
+                        continue
+                    rr = int(2 * side_row - r)
+                    if not (0 <= rr < x.shape[0]):
+                        return None
+                    out[rr, c] = 5
         else:
-            mid = (c0 + c1) / 2.0
+            cols = [c for c, run in col_runs.items() if run == best_v]
+            left_col, right_col = min(cols), max(cols)
             for r, c in fives:
-                rr = int(r)
-                cc = int(c0 - (c - c0)) if c < mid else int(c1 + (c1 - c))
-                if not (0 <= cc < x.shape[1]):
-                    return None
-                out[rr, cc] = 5
+                distances = [(abs(c - left_col), left_col), (abs(c - right_col), right_col)]
+                best_dist = min(dist for dist, _ in distances)
+                for dist, side_col in distances:
+                    if dist != best_dist:
+                        continue
+                    cc = int(2 * side_col - c)
+                    if not (0 <= cc < x.shape[1]):
+                        return None
+                    out[r, cc] = 5
 
         return out
 
@@ -1313,9 +1354,6 @@ class ArcAgent:
     # fill zero background with 3, but enclosed zero regions with 2
     # -------------------------
     def _fill_zero_regions_outer_three_inner_two(self, x):
-        if np.any((x != 0) & (x == 2)):
-            return None
-
         h, w = x.shape
         zero_seen = np.zeros((h, w), dtype=bool)
         out = x.copy()
@@ -1361,58 +1399,59 @@ class ArcAgent:
         return out
 
     # -------------------------
-    # recolor only 1-components that enclose at least one zero hole to 8
+    # recolor non-background components that enclose at least one background hole to 8
     # -------------------------
     def _recolor_holey_one_components_to_eight(self, x):
-        comps = self._connected_components_of_color(x, 1)
-        if not comps:
-            return None
-
         h, w = x.shape
         out = x.copy()
         changed = False
         values, counts = np.unique(x, return_counts=True)
         bg_color = int(values[np.argmax(counts)])
 
-        for comp in comps:
-            comp_set = set(comp)
-            rows = [r for r, _ in comp]
-            cols = [c for _, c in comp]
-            r0, r1 = min(rows), max(rows)
-            c0, c1 = min(cols), max(cols)
+        foreground_colors = [int(c) for c in values if c != bg_color]
+        if not foreground_colors:
+            return None
 
-            reachable = np.zeros((h, w), dtype=bool)
-            stack = []
-            for r in range(r0, r1 + 1):
-                for c in range(c0, c1 + 1):
-                    if r in (r0, r1) or c in (c0, c1):
+        for color in foreground_colors:
+            for comp in self._connected_components_of_color(x, color):
+                comp_set = set(comp)
+                rows = [r for r, _ in comp]
+                cols = [c for _, c in comp]
+                r0, r1 = min(rows), max(rows)
+                c0, c1 = min(cols), max(cols)
+
+                reachable = np.zeros((h, w), dtype=bool)
+                stack = []
+                for r in range(r0, r1 + 1):
+                    for c in range(c0, c1 + 1):
+                        if r in (r0, r1) or c in (c0, c1):
+                            if x[r, c] == bg_color and (r, c) not in comp_set and not reachable[r, c]:
+                                reachable[r, c] = True
+                                stack.append((r, c))
+
+                while stack:
+                    r, c = stack.pop()
+                    for nr, nc in self._neighbors4(r, c, h, w):
+                        if nr < r0 or nr > r1 or nc < c0 or nc > c1:
+                            continue
+                        if x[nr, nc] != bg_color or (nr, nc) in comp_set or reachable[nr, nc]:
+                            continue
+                        reachable[nr, nc] = True
+                        stack.append((nr, nc))
+
+                has_hole = False
+                for r in range(r0, r1 + 1):
+                    for c in range(c0, c1 + 1):
                         if x[r, c] == bg_color and (r, c) not in comp_set and not reachable[r, c]:
-                            reachable[r, c] = True
-                            stack.append((r, c))
-
-            while stack:
-                r, c = stack.pop()
-                for nr, nc in self._neighbors4(r, c, h, w):
-                    if nr < r0 or nr > r1 or nc < c0 or nc > c1:
-                        continue
-                    if x[nr, nc] != bg_color or (nr, nc) in comp_set or reachable[nr, nc]:
-                        continue
-                    reachable[nr, nc] = True
-                    stack.append((nr, nc))
-
-            has_hole = False
-            for r in range(r0, r1 + 1):
-                for c in range(c0, c1 + 1):
-                    if x[r, c] == bg_color and (r, c) not in comp_set and not reachable[r, c]:
-                        has_hole = True
+                            has_hole = True
+                            break
+                    if has_hole:
                         break
-                if has_hole:
-                    break
 
-            if has_hole:
-                for r, c in comp:
-                    out[r, c] = 8
-                    changed = True
+                if has_hole:
+                    for r, c in comp:
+                        out[r, c] = 8
+                        changed = True
 
         return out if changed else None
 

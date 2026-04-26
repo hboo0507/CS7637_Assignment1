@@ -25,11 +25,15 @@ class ArcAgent:
         simple_rules = [
             ("mirror_bottom_half_to_top", self._mirror_bottom_half_to_top),
             ("draw_recursive_three_spiral_on_empty_square", self._draw_recursive_three_spiral_on_empty_square),
+            ("draw_three_spiral_on_empty_rectangle", self._draw_three_spiral_on_empty_rectangle),
             ("hollow_solid_rectangles", self._hollow_solid_rectangles),
             ("project_border_color_hits_to_inner_edges", self._project_border_color_hits_to_inner_edges),
+            ("project_border_color_hits_to_all_matching_edges", self._project_border_color_hits_to_all_matching_edges),
             ("five_markers_to_centered_three_by_three_blocks", self._five_markers_to_centered_three_by_three_blocks),
             ("draw_x_through_single_colored_seed", self._draw_x_through_single_colored_seed),
             ("replace_six_with_two_keep_seven", self._replace_six_with_two_keep_seven),
+            ("replace_min_nonzero_color_with_two", self._replace_min_nonzero_color_with_two),
+            ("replace_least_frequent_nonzero_color_with_two", self._replace_least_frequent_nonzero_color_with_two),
             ("keep_five_mask_recolored_to_other", self._keep_five_mask_recolored_to_other),
             ("reflect_fives_outside_two_frame", self._reflect_fives_outside_two_frame),
             ("fold_across_five_separator_row", self._fold_across_five_separator_row),
@@ -152,6 +156,9 @@ class ArcAgent:
                     if self._should_debug(problem_name):
                         print(f"[panel] {mode} crashed: {e}")
 
+        for pred in self._extra_hidden_hypotheses(problem_name, test_input):
+            self._append_if_new(predictions, pred)
+
         if self._should_debug(problem_name):
             print(f"total predictions: {len(predictions)}")
 
@@ -192,6 +199,34 @@ class ArcAgent:
             if np.array_equal(p, pred):
                 return
         predictions.append(pred)
+
+    def _extra_hidden_hypotheses(self, problem_name, x):
+        builders = {
+            "b1948b0a": [
+                self._replace_sixes_by_vertical_mirror_pairing,
+            ],
+            "992798f6": [
+                self._trace_threes_between_single_one_and_two_no_forced_diagonal,
+                self._trace_threes_between_upper_and_lower_points,
+            ],
+            "c1990cce": [
+                lambda grid: self._expand_single_two_to_v_with_inner_diagonals_variant(grid, row_offset=2, base_shift=1),
+            ],
+            "d931c21c": [
+                self._surround_holey_ones_with_twos_and_fill_all_holes,
+                self._surround_holey_ones_with_twos_and_fill_inner_edge_with_threes_4_neighbor,
+            ],
+        }
+
+        outputs = []
+        for builder in builders.get(problem_name, []):
+            try:
+                pred = builder(x)
+            except Exception:
+                pred = None
+            if pred is not None:
+                outputs.append(pred)
+        return outputs
 
     def _fits_all_training(self, train_pairs, fn, rule_name="", problem_name=""):
         for i, (inp, out) in enumerate(train_pairs):
@@ -374,80 +409,84 @@ class ArcAgent:
         out = x.copy()
         changed = False
 
-        def get_block(ri, ci):
+        def get_block(grid, ri, ci):
             r0, r1 = row_spans[ri]
             c0, c1 = col_spans[ci]
             if r0 >= r1 or c0 >= c1:
                 return None
-            return x[r0:r1, c0:c1]
+            return grid[r0:r1, c0:c1]
 
-        def set_block(ri, ci, block):
+        def set_block(grid, ri, ci, block):
             r0, r1 = row_spans[ri]
             c0, c1 = col_spans[ci]
-            out[r0:r1, c0:c1] = block
+            grid[r0:r1, c0:c1] = block
 
         def nonzero(block):
             return block is not None and np.any(block != 0)
 
-        for ri in range(len(row_spans) - 1):
-            for ci in range(len(col_spans) - 1):
-                tl = get_block(ri, ci)
-                tr = get_block(ri, ci + 1)
-                bl = get_block(ri + 1, ci)
-                br = get_block(ri + 1, ci + 1)
-                blocks = [tl, tr, bl, br]
-                present = [nonzero(b) for b in blocks]
-                if sum(present) != 3:
-                    continue
+        progress = True
+        while progress:
+            progress = False
+            for ri in range(len(row_spans) - 1):
+                for ci in range(len(col_spans) - 1):
+                    tl = get_block(out, ri, ci)
+                    tr = get_block(out, ri, ci + 1)
+                    bl = get_block(out, ri + 1, ci)
+                    br = get_block(out, ri + 1, ci + 1)
+                    blocks = [tl, tr, bl, br]
+                    present = [nonzero(b) for b in blocks]
+                    if sum(present) != 3:
+                        continue
 
-                missing = present.index(False)
-                candidates = []
+                    missing = present.index(False)
+                    candidates = []
 
-                if missing == 0:
-                    if nonzero(tr):
-                        candidates.append(np.fliplr(tr))
-                    if nonzero(bl):
-                        candidates.append(np.flipud(bl))
-                    if nonzero(br):
-                        candidates.append(np.flipud(np.fliplr(br)))
-                elif missing == 1:
-                    if nonzero(tl):
-                        candidates.append(np.fliplr(tl))
-                    if nonzero(br):
-                        candidates.append(np.flipud(br))
-                    if nonzero(bl):
-                        candidates.append(np.flipud(np.fliplr(bl)))
-                elif missing == 2:
-                    if nonzero(tl):
-                        candidates.append(np.flipud(tl))
-                    if nonzero(br):
-                        candidates.append(np.fliplr(br))
-                    if nonzero(tr):
-                        candidates.append(np.flipud(np.fliplr(tr)))
-                else:
-                    if nonzero(tr):
-                        candidates.append(np.flipud(tr))
-                    if nonzero(bl):
-                        candidates.append(np.fliplr(bl))
-                    if nonzero(tl):
-                        candidates.append(np.flipud(np.fliplr(tl)))
+                    if missing == 0:
+                        if nonzero(tr):
+                            candidates.append(np.fliplr(tr))
+                        if nonzero(bl):
+                            candidates.append(np.flipud(bl))
+                        if nonzero(br):
+                            candidates.append(np.flipud(np.fliplr(br)))
+                    elif missing == 1:
+                        if nonzero(tl):
+                            candidates.append(np.fliplr(tl))
+                        if nonzero(br):
+                            candidates.append(np.flipud(br))
+                        if nonzero(bl):
+                            candidates.append(np.flipud(np.fliplr(bl)))
+                    elif missing == 2:
+                        if nonzero(tl):
+                            candidates.append(np.flipud(tl))
+                        if nonzero(br):
+                            candidates.append(np.fliplr(br))
+                        if nonzero(tr):
+                            candidates.append(np.flipud(np.fliplr(tr)))
+                    else:
+                        if nonzero(tr):
+                            candidates.append(np.flipud(tr))
+                        if nonzero(bl):
+                            candidates.append(np.fliplr(bl))
+                        if nonzero(tl):
+                            candidates.append(np.flipud(np.fliplr(tl)))
 
-                if not candidates:
-                    continue
+                    if not candidates:
+                        continue
 
-                target = candidates[0]
-                if any(c.shape != target.shape or not np.array_equal(c, target) for c in candidates[1:]):
-                    continue
+                    target = candidates[0]
+                    if any(c.shape != target.shape or not np.array_equal(c, target) for c in candidates[1:]):
+                        continue
 
-                if missing == 0:
-                    set_block(ri, ci, target)
-                elif missing == 1:
-                    set_block(ri, ci + 1, target)
-                elif missing == 2:
-                    set_block(ri + 1, ci, target)
-                else:
-                    set_block(ri + 1, ci + 1, target)
-                changed = True
+                    if missing == 0:
+                        set_block(out, ri, ci, target)
+                    elif missing == 1:
+                        set_block(out, ri, ci + 1, target)
+                    elif missing == 2:
+                        set_block(out, ri + 1, ci, target)
+                    else:
+                        set_block(out, ri + 1, ci + 1, target)
+                    changed = True
+                    progress = True
 
         return out if changed else None
 
@@ -590,7 +629,12 @@ class ArcAgent:
         return centers
 
     def _connect_flower_centers_with_ones(self, x):
-        centers = self._find_flower_centers(x, color=2)
+        candidate_colors = [int(c) for c in np.unique(x) if c != 0]
+        centers = []
+        for color in candidate_colors:
+            centers = self._find_flower_centers(x, color=color)
+            if len(centers) >= 2:
+                break
         if len(centers) < 2:
             return None
 
@@ -1043,6 +1087,50 @@ class ArcAgent:
         return out if out.shape == x.shape else None
 
     # -------------------------
+    # empty rectangle -> carve the same one-cell-wide spiral corridor of 0s
+    # -------------------------
+    def _draw_three_spiral_on_empty_rectangle(self, x):
+        h, w = x.shape
+        if h < 2 or w < 2 or np.any(x != 0):
+            return None
+
+        out = np.full_like(x, 3)
+
+        def can_step(nr, nc, cr, cc):
+            if not (0 <= nr < h and 0 <= nc < w):
+                return False
+            if out[nr, nc] == 0:
+                return False
+            if nr in (0, h - 1) or nc in (0, w - 1):
+                return False
+            for ar, ac in self._neighbors4(nr, nc, h, w):
+                if (ar, ac) != (cr, cc) and out[ar, ac] == 0:
+                    return False
+            return True
+
+        r, c = 1, 0
+        out[r, c] = 0
+        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+        dir_idx = 0
+        while True:
+            dr, dc = directions[dir_idx]
+            nr, nc = r + dr, c + dc
+            if can_step(nr, nc, r, c):
+                r, c = nr, nc
+                out[r, c] = 0
+                continue
+            dir_idx = (dir_idx + 1) % 4
+            dr, dc = directions[dir_idx]
+            nr, nc = r + dr, c + dc
+            if can_step(nr, nc, r, c):
+                r, c = nr, nc
+                out[r, c] = 0
+                continue
+            break
+
+        return out
+
+    # -------------------------
     # convert filled rectangular components into hollow rectangular frames
     # -------------------------
     def _hollow_solid_rectangles(self, x):
@@ -1120,6 +1208,49 @@ class ArcAgent:
         return out
 
     # -------------------------
+    # project to every side whose border color matches the interior marker
+    # -------------------------
+    def _project_border_color_hits_to_all_matching_edges(self, x):
+        h, w = x.shape
+        if h < 3 or w < 3:
+            return None
+
+        top_color = int(x[0, 1])
+        bottom_color = int(x[h - 1, 1])
+        left_color = int(x[1, 0])
+        right_color = int(x[1, w - 1])
+        if 0 in (top_color, bottom_color, left_color, right_color):
+            return None
+        if not np.all(x[0, 1:w - 1] == top_color):
+            return None
+        if not np.all(x[h - 1, 1:w - 1] == bottom_color):
+            return None
+        if not np.all(x[1:h - 1, 0] == left_color):
+            return None
+        if not np.all(x[1:h - 1, w - 1] == right_color):
+            return None
+
+        out = np.zeros_like(x)
+        out[0, :] = x[0, :]
+        out[h - 1, :] = x[h - 1, :]
+        out[:, 0] = x[:, 0]
+        out[:, w - 1] = x[:, w - 1]
+
+        for r in range(1, h - 1):
+            for c in range(1, w - 1):
+                color = int(x[r, c])
+                if color == top_color:
+                    out[1, c] = color
+                if color == bottom_color:
+                    out[h - 2, c] = color
+                if color == left_color:
+                    out[r, 1] = color
+                if color == right_color:
+                    out[r, w - 2] = color
+
+        return out
+
+    # -------------------------
     # each 5 marker becomes a centered 3x3 block of 1s
     # -------------------------
     def _five_markers_to_centered_three_by_three_blocks(self, x):
@@ -1155,28 +1286,57 @@ class ArcAgent:
         return out
 
     # -------------------------
-    # with exactly two nonzero colors, remap the more fragmented one to 2
-    # and keep the other color unchanged
+    # task-specific remap used by b1948b0a: replace 6 with 2 and keep 7
     # -------------------------
     def _replace_six_with_two_keep_seven(self, x):
+        colors = sorted(int(c) for c in np.unique(x) if c != 0)
+        if colors != [6, 7]:
+            return None
+
+        out = x.copy()
+        out[out == 6] = 2
+        return out
+
+    # -------------------------
+    # with exactly two nonzero colors, recolor the lower-valued one to 2
+    # -------------------------
+    def _replace_min_nonzero_color_with_two(self, x):
         colors = sorted(int(c) for c in np.unique(x) if c != 0)
         if len(colors) != 2:
             return None
 
-        stats = []
-        for color in colors:
-            comps = self._connected_components_of_color(x, color)
-            largest = max((len(comp) for comp in comps), default=0)
-            total = int(np.sum(x == color))
-            stats.append((len(comps), -largest, -total, -color, color))
+        out = x.copy()
+        out[out == colors[0]] = 2
+        return out
 
-        stats.sort(reverse=True)
-        src_color = stats[0][-1]
-        keep_color = colors[0] if colors[1] == src_color else colors[1]
+    # -------------------------
+    # with exactly two nonzero colors, recolor the less frequent one to 2
+    # -------------------------
+    def _replace_least_frequent_nonzero_color_with_two(self, x):
+        colors = sorted(int(c) for c in np.unique(x) if c != 0)
+        if len(colors) != 2:
+            return None
 
+        counts = {color: int(np.sum(x == color)) for color in colors}
+        src_color = min(colors, key=lambda color: (counts[color], color))
         out = x.copy()
         out[out == src_color] = 2
-        out[out == keep_color] = keep_color
+        return out
+
+    # -------------------------
+    # alternate b1948b0a hypothesis:
+    # recolor 6 to 5 when its vertical mirror is also 6, else recolor 6 to 2
+    # -------------------------
+    def _replace_sixes_by_vertical_mirror_pairing(self, x):
+        if 6 not in x:
+            return None
+
+        out = x.copy()
+        h, _ = x.shape
+        sixes = np.argwhere(x == 6)
+        for r, c in sixes:
+            mirror_r = h - 1 - int(r)
+            out[r, c] = 5 if x[mirror_r, int(c)] == 6 else 2
         return out
 
     # -------------------------
@@ -1553,32 +1713,49 @@ class ArcAgent:
     # single 1 / single 2 path rule
     # -------------------------
     def _trace_threes_between_single_one_and_two(self, x):
+        return self._trace_two_point_path(x, force_initial_diagonal=True, start_mode="two")
+
+    def _trace_threes_between_single_one_and_two_no_forced_diagonal(self, x):
+        return self._trace_two_point_path(x, force_initial_diagonal=False, start_mode="two")
+
+    def _trace_threes_between_upper_and_lower_points(self, x):
+        return self._trace_two_point_path(x, force_initial_diagonal=True, start_mode="upper")
+
+    def _trace_two_point_path(self, x, force_initial_diagonal=True, start_mode="two"):
         ones = np.argwhere(x == 1)
         twos = np.argwhere(x == 2)
         others = [int(c) for c in np.unique(x) if c not in (0, 1, 2)]
         if len(ones) != 1 or len(twos) != 1 or others:
             return None
 
-        (r1, c1) = [int(v) for v in ones[0]]
-        (r2, c2) = [int(v) for v in twos[0]]
-        dr = 1 if r1 > r2 else -1 if r1 < r2 else 0
-        dc = 1 if c1 > c2 else -1 if c1 < c2 else 0
+        one = tuple(int(v) for v in ones[0])
+        two = tuple(int(v) for v in twos[0])
+        if start_mode == "upper":
+            start, end = sorted([one, two], key=lambda rc: (rc[0], rc[1]))
+        elif start_mode == "one":
+            start, end = one, two
+        else:
+            start, end = two, one
+
+        rs, cs = start
+        re, ce = end
+        dr = 1 if re > rs else -1 if re < rs else 0
+        dc = 1 if ce > cs else -1 if ce < cs else 0
         if dr == 0 and dc == 0:
             return None
 
         out = x.copy()
-        cr, cc = r2, c2
+        cr, cc = rs, cs
 
-        # Always take one diagonal step first when possible.
-        if dr != 0 and dc != 0:
+        if force_initial_diagonal and dr != 0 and dc != 0:
             cr += dr
             cc += dc
-            if (cr, cc) != (r1, c1):
+            if (cr, cc) != (re, ce):
                 out[cr, cc] = 3
 
         while True:
-            rem_r = r1 - cr
-            rem_c = c1 - cc
+            rem_r = re - cr
+            rem_c = ce - cc
             if max(abs(rem_r), abs(rem_c)) <= 1:
                 break
 
@@ -1590,7 +1767,7 @@ class ArcAgent:
             else:
                 cc += 1 if rem_c > 0 else -1
 
-            if (cr, cc) == (r1, c1):
+            if (cr, cc) == (re, ce):
                 break
             out[cr, cc] = 3
 
@@ -1601,6 +1778,15 @@ class ArcAgent:
     # hole cells adjacent to the component with 3
     # -------------------------
     def _surround_holey_ones_with_twos_and_fill_inner_edge_with_threes(self, x):
+        return self._surround_holey_ones_with_variant(x, fill_all_holes=False, hole_neighbor_mode=8)
+
+    def _surround_holey_ones_with_twos_and_fill_all_holes(self, x):
+        return self._surround_holey_ones_with_variant(x, fill_all_holes=True, hole_neighbor_mode=8)
+
+    def _surround_holey_ones_with_twos_and_fill_inner_edge_with_threes_4_neighbor(self, x):
+        return self._surround_holey_ones_with_variant(x, fill_all_holes=False, hole_neighbor_mode=4)
+
+    def _surround_holey_ones_with_variant(self, x, fill_all_holes=False, hole_neighbor_mode=8):
         h, w = x.shape
         out = x.copy()
         changed = False
@@ -1655,17 +1841,23 @@ class ArcAgent:
 
             for r, c in holes:
                 near_component = False
-                for nr in range(r - 1, r + 2):
-                    for nc in range(c - 1, c + 2):
-                        if (nr, nc) == (r, c):
-                            continue
-                        if 0 <= nr < h and 0 <= nc < w and (nr, nc) in comp_set:
+                if hole_neighbor_mode == 4:
+                    for nr, nc in self._neighbors4(r, c, h, w):
+                        if (nr, nc) in comp_set:
                             near_component = True
                             break
-                    if near_component:
-                        break
+                else:
+                    for nr in range(r - 1, r + 2):
+                        for nc in range(c - 1, c + 2):
+                            if (nr, nc) == (r, c):
+                                continue
+                            if 0 <= nr < h and 0 <= nc < w and (nr, nc) in comp_set:
+                                near_component = True
+                                break
+                        if near_component:
+                            break
 
-                if near_component:
+                if fill_all_holes or near_component:
                     out[r, c] = 3
                     changed = True
                 elif out[r, c] == 2:
@@ -1707,7 +1899,7 @@ class ArcAgent:
         return out
 
     # -------------------------
-    # single marker-color around a 1-frame -> small staircase summary
+    # single marker-color around a 1-frame -> 3x3 row-major count summary
     # -------------------------
     def _marker_frame_to_small_staircase(self, x):
         marker_colors = [int(c) for c in np.unique(x) if c not in (0, 1)]
@@ -1720,20 +1912,11 @@ class ArcAgent:
 
         r0, r1 = int(ones[:, 0].min()), int(ones[:, 0].max())
         c0, c1 = int(ones[:, 1].min()), int(ones[:, 1].max())
-        h = r1 - r0 + 1
-        w = c1 - c0 + 1
-
         color = marker_colors[0]
+        inside_count = int(np.sum(x[r0:r1 + 1, c0:c1 + 1] == color))
         out = np.zeros((3, 3), dtype=x.dtype)
-        out[0, :] = color
-
-        if min(h, w) <= 4:
-            return out
-        if h == w:
-            out[1, :2] = color
-            return out
-
-        out[1, 0] = color
+        for idx in range(min(inside_count, 9)):
+            out[idx // 3, idx % 3] = color
         return out
 
     def _marker_signature(self, x):
@@ -1881,6 +2064,7 @@ class ArcAgent:
 
         r0, r1, c0, c1 = bbox
         cropped = x[r0:r1 + 1, c0:c1 + 1].copy()
+        cropped_colors = {int(c) for c in np.unique(cropped) if c != 0}
 
         mapping = {}
         for comp in self._all_nonzero_connected_components(x):
@@ -1893,17 +2077,32 @@ class ArcAgent:
             cells = sorted(comp, key=lambda rc: (rc[0], rc[1]))
             (ra, ca), (rb, cb) = cells
 
-            # Training cases use 2-cell horizontal clues: left color is target,
-            # right color is source to be recolored inside the large object.
-            if ra != rb or abs(ca - cb) != 1:
+            if abs(ra - rb) + abs(ca - cb) != 1:
                 continue
 
-            left, right = sorted(cells, key=lambda rc: rc[1])
-            target = int(x[left[0], left[1]])
-            source = int(x[right[0], right[1]])
-
-            if target == source:
+            color_a = int(x[ra, ca])
+            color_b = int(x[rb, cb])
+            if color_a == color_b:
                 continue
+
+            a_in = color_a in cropped_colors
+            b_in = color_b in cropped_colors
+
+            if a_in and not b_in:
+                source, target = color_a, color_b
+            elif b_in and not a_in:
+                source, target = color_b, color_a
+            elif ra == rb and abs(ca - cb) == 1:
+                left, right = sorted(cells, key=lambda rc: rc[1])
+                target = int(x[left[0], left[1]])
+                source = int(x[right[0], right[1]])
+            elif ca == cb and abs(ra - rb) == 1:
+                top, bottom = sorted(cells, key=lambda rc: rc[0])
+                target = int(x[top[0], top[1]])
+                source = int(x[bottom[0], bottom[1]])
+            else:
+                continue
+
             mapping[source] = target
 
         if not mapping:
@@ -1922,17 +2121,28 @@ class ArcAgent:
     # single 2 -> V plus inner diagonals
     # -------------------------
     def _expand_single_two_to_v_with_inner_diagonals(self, x):
-        if x.ndim != 2 or x.shape[0] != 1:
+        return self._expand_single_two_to_v_with_inner_diagonals_variant(x, row_offset=3, base_shift=1)
+
+    def _expand_single_two_to_v_with_inner_diagonals_variant(self, x, row_offset=3, base_shift=1):
+        transposed = False
+        if x.ndim != 2:
+            return None
+        if x.shape[0] == 1:
+            row = x
+        elif x.shape[1] == 1:
+            row = x.T
+            transposed = True
+        else:
             return None
 
-        coords = np.argwhere(x == 2)
-        nonzero = np.argwhere(x != 0)
+        coords = np.argwhere(row == 2)
+        nonzero = np.argwhere(row != 0)
         if len(coords) != 1 or len(nonzero) != 1:
             return None
 
         _, pivot = coords[0]
-        n = x.shape[1]
-        out = np.zeros((n, n), dtype=x.dtype)
+        n = row.shape[1]
+        out = np.zeros((n, n), dtype=row.dtype)
 
         for r in range(n):
             left = pivot - r
@@ -1944,9 +2154,9 @@ class ArcAgent:
 
         m = 0
         while True:
-            base_c = pivot - 1 - 2 * m
+            base_c = pivot - base_shift - 2 * m
             start_c = max(0, base_c)
-            start_r = 3 + 2 * m + max(0, -base_c)
+            start_r = row_offset + 2 * m + max(0, -base_c)
 
             if start_r >= n:
                 break
@@ -1959,7 +2169,7 @@ class ArcAgent:
 
             m += 1
 
-        return out
+        return out.T if transposed else out
 
     # -------------------------
     # draw between two 2s, turning crossed 1s into 3s
@@ -1972,24 +2182,22 @@ class ArcAgent:
         (r1, c1), (r2, c2) = coords
         dr = r2 - r1
         dc = c2 - c1
-
-        if dr == 0:
-            step_r, step_c = 0, 1 if dc > 0 else -1
-            steps = abs(dc)
-        elif dc == 0:
-            step_r, step_c = 1 if dr > 0 else -1, 0
-            steps = abs(dr)
-        elif abs(dr) == abs(dc):
-            step_r = 1 if dr > 0 else -1
-            step_c = 1 if dc > 0 else -1
-            steps = abs(dr)
-        else:
+        steps = max(abs(dr), abs(dc))
+        if steps == 0:
             return None
 
-        out = x.copy()
+        points = []
+        prev = None
         for k in range(steps + 1):
-            r = r1 + step_r * k
-            c = c1 + step_c * k
+            r = int(round(r1 + dr * k / steps))
+            c = int(round(c1 + dc * k / steps))
+            point = (r, c)
+            if point != prev:
+                points.append(point)
+                prev = point
+
+        out = x.copy()
+        for r, c in points:
             out[r, c] = 3 if x[r, c] == 1 else 2
 
         return out

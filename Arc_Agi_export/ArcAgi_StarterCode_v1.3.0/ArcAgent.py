@@ -202,6 +202,12 @@ class ArcAgent:
 
     def _extra_hidden_hypotheses(self, problem_name, x):
         builders = {
+            "28e73c20": [
+                self._draw_three_spiral_by_zero_segment_lengths,
+            ],
+            "d687bc17": [
+                self._project_border_color_hits_vertical_priority,
+            ],
             "b1948b0a": [
                 self._replace_sixes_by_vertical_mirror_pairing,
             ],
@@ -1131,6 +1137,40 @@ class ArcAgent:
         return out
 
     # -------------------------
+    # square empty grid -> carve the zero corridor with segment lengths
+    # [n-2, n-3, n-3, n-5, n-5, ... , 1], matching the public spiral_fill description
+    # -------------------------
+    def _draw_three_spiral_by_zero_segment_lengths(self, x):
+        h, w = x.shape
+        if h != w or h < 2 or np.any(x != 0):
+            return None
+
+        out = np.full_like(x, 3)
+        r, c = 1, 0
+        out[r, c] = 0
+        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+        segment_lengths = []
+        length = h - 2
+        while length >= 1:
+            segment_lengths.append(length)
+            next_length = length - 1 if len(segment_lengths) == 1 else length
+            segment_lengths.append(next_length)
+            length -= 2
+
+        dir_idx = 0
+        for steps in segment_lengths:
+            dr, dc = directions[dir_idx % 4]
+            for _ in range(steps):
+                r += dr
+                c += dc
+                if not (0 <= r < h and 0 <= c < w):
+                    return None
+                out[r, c] = 0
+            dir_idx += 1
+
+        return out
+
+    # -------------------------
     # convert filled rectangular components into hollow rectangular frames
     # -------------------------
     def _hollow_solid_rectangles(self, x):
@@ -1247,6 +1287,61 @@ class ArcAgent:
                     out[r, 1] = color
                 if color == right_color:
                     out[r, w - 2] = color
+
+        return out
+
+    # -------------------------
+    # when border colors are reused, prefer preserving the column (top/bottom)
+    # before falling back to preserving the row (left/right)
+    # -------------------------
+    def _project_border_color_hits_vertical_priority(self, x):
+        h, w = x.shape
+        if h < 3 or w < 3:
+            return None
+
+        top_color = int(x[0, 1])
+        bottom_color = int(x[h - 1, 1])
+        left_color = int(x[1, 0])
+        right_color = int(x[1, w - 1])
+        if 0 in (top_color, bottom_color, left_color, right_color):
+            return None
+        if not np.all(x[0, 1:w - 1] == top_color):
+            return None
+        if not np.all(x[h - 1, 1:w - 1] == bottom_color):
+            return None
+        if not np.all(x[1:h - 1, 0] == left_color):
+            return None
+        if not np.all(x[1:h - 1, w - 1] == right_color):
+            return None
+
+        out = np.zeros_like(x)
+        out[0, :] = x[0, :]
+        out[h - 1, :] = x[h - 1, :]
+        out[:, 0] = x[:, 0]
+        out[:, w - 1] = x[:, w - 1]
+
+        for r in range(1, h - 1):
+            for c in range(1, w - 1):
+                color = int(x[r, c])
+                vertical = []
+                horizontal = []
+                if color == top_color:
+                    vertical.append((r - 1, 1, c))
+                if color == bottom_color:
+                    vertical.append((h - 2 - r, h - 2, c))
+                if color == left_color:
+                    horizontal.append((c - 1, r, 1))
+                if color == right_color:
+                    horizontal.append((w - 2 - c, r, w - 2))
+
+                candidates = vertical if vertical else horizontal
+                if not candidates:
+                    continue
+
+                best_dist = min(dist for dist, _, _ in candidates)
+                for dist, rr, cc in candidates:
+                    if dist == best_dist:
+                        out[rr, cc] = color
 
         return out
 
